@@ -1,0 +1,176 @@
+2022-08-27 01:57:54.933823: I tensorflow/core/util/util.cc:169] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2022-08-27 01:57:54.937612: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'libcudart.so.11.0'; dlerror: libcudart.so.11.0: cannot open shared object file: No such file or directory; LD_LIBRARY_PATH: /opt/slurm/19.05.6/lib:/opt/cuda/10.1/open64/lib:/opt/cuda/10.1/lib64
+2022-08-27 01:57:54.937637: I tensorflow/stream_executor/cuda/cudart_stub.cc:29] Ignore above cudart dlerror if you do not have a GPU set up on your machine.
+2022.03.5
+Using hyper-parameters:
+Dataname                  - zinc        
+FromDeepchem              - True        
+featurizer                - ECFP        
+normalizeSize             - 120         
+MAX_LEN                   - 120         
+data_file                 - 250k_rndm_zinc_drugs_clean_3.csv
+char_file                 - zinc.json   
+encoder_weights_file      - zinc_encoder.h5
+decoder_weights_file      - zinc_decoder.h5
+test_idx_file             - test_idx.npy
+history_file              - history.csv 
+checkpoint_path           - ./          
+do_prop_pred              - True        
+TRAIN_MODEL               - True        
+ENC_DEC_TEST              - False       
+PADDING                   - right       
+RAND_SEED                 - 42          
+epochs                    - 70          
+vae_annealer_start        - 29          
+dropout_rate_mid          - 0.08283292970479479
+anneal_sigmod_slope       - 0.5106654305791392
+recurrent_dim             - 488         
+batch_size                - 126         
+lr                        - 0.00039192162392520126
+hidden_dim                - 196         
+tgru_dropout              - 0.19617749608323892
+hg_growth_factor          - 1.2281884874932403
+middle_layer              - 1           
+momentum                  - 0.9717090063868801
+rest of parameters are set as default
+2022.03.5
+1 / 0	76.0623
+train tensor(0.0069, device='cuda:0', grad_fn=<DivBackward0>)
+2 / 0	0.3803
+train tensor(0.0027, device='cuda:0', grad_fn=<DivBackward0>)
+3 / 0	0.3251
+train tensor(0.0026, device='cuda:0', grad_fn=<DivBackward0>)
+4 / 0	0.2871
+train tensor(0.0025, device='cuda:0', grad_fn=<DivBackward0>)
+5 / 0	0.2813
+train tensor(0.0024, device='cuda:0', grad_fn=<DivBackward0>)
+6 / 0	0.2948
+train tensor(0.0024, device='cuda:0', grad_fn=<DivBackward0>)
+7 / 0	0.3194
+train tensor(0.0024, device='cuda:0', grad_fn=<DivBackward0>)
+8 / 0	0.3051
+train tensor(0.0024, device='cuda:0', grad_fn=<DivBackward0>)
+9 / 0	0.3080
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+10 / 0	0.2827
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+11 / 0	0.2875
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+12 / 0	0.2786
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+13 / 0	0.2844
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+14 / 0	0.2704
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+15 / 0	0.3044
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+16 / 0	0.3148
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+17 / 0	0.2980
+train tensor(0.0023, device='cuda:0', grad_fn=<DivBackward0>)
+18 / 0	0.3103
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+19 / 0	0.2635
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+20 / 0	0.2840
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+21 / 0	0.2536
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+22 / 0	0.2666
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+23 / 0	0.2749
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+24 / 0	0.3017
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+25 / 0	0.3176
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+26 / 0	0.2673
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+27 / 0	0.2524
+train tensor(0.0022, device='cuda:0', grad_fn=<DivBackward0>)
+28 / 0	0.2557
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+29 / 0	0.2683
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+30 / 0	0.2667
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+31 / 0	0.2717
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+32 / 0	0.2662
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+33 / 0	0.2522
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+34 / 0	0.2585
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+35 / 0	0.2768
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+36 / 0	0.2421
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+37 / 0	0.2511
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+38 / 0	0.2384
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+39 / 0	0.2802
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+40 / 0	0.2438
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+41 / 0	0.2451
+train tensor(0.0021, device='cuda:0', grad_fn=<DivBackward0>)
+42 / 0	0.2729
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+43 / 0	0.2432
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+44 / 0	0.2487
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+45 / 0	0.2509
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+46 / 0	0.2366
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+47 / 0	0.2774
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+48 / 0	0.2651
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+49 / 0	0.2597
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+50 / 0	0.2425
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+51 / 0	0.2624
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+52 / 0	0.2427
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+53 / 0	0.2286
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+54 / 0	0.2265
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+55 / 0	0.2306
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+56 / 0	0.2580
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+57 / 0	0.2358
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+58 / 0	0.2406
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+59 / 0	0.2387
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+60 / 0	0.2671
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+61 / 0	0.2386
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+62 / 0	0.2511
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+63 / 0	0.2424
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+64 / 0	0.2554
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+65 / 0	0.2375
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+66 / 0	0.2243
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+67 / 0	0.2531
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+68 / 0	0.2364
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+69 / 0	0.2368
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
+70 / 0	0.2476
+train tensor(0.0020, device='cuda:0', grad_fn=<DivBackward0>)
