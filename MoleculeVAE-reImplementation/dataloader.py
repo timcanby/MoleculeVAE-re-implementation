@@ -19,6 +19,9 @@ import torch.utils.data
 import sascorer
 import argparse
 from collections import OrderedDict
+import pickle
+
+od={}
 #defualt=Fingerprint dataset
 def loadDataset(Dataset=None,FromDeepchem=True,featurizer='ECFP'):
     if FromDeepchem:
@@ -41,25 +44,47 @@ def caculateLSvalue(Smiles):
 
 def oneHotencoder(SmiData,normalizeSize):
     import collections
+    global od
     from collections import OrderedDict
     dicset=list(set([*''.join(SmiData)]))
-    od = collections.OrderedDict([(a,list(dicset).index(a)) for a in dicset])
+    if os.path.exists("Dicdata.pkl"):
+        a_file = open("Dicdata.pkl", "rb")
+        od = pickle.load(a_file)
+        a_file.close()
+        x = [np.concatenate((torch.nn.functional.one_hot(torch.tensor(list(map(lambda a: od[a], [*vec]))), num_classes=len(od)), torch.zeros(normalizeSize - len(vec), len(od))), axis=0) for vec
+             in SmiData]
+    else:
+        od = collections.OrderedDict([(a, list(dicset).index(a)) for a in dicset])
+        a_file = open("Dicdata.pkl", "wb")
+        pickle.dump(od, a_file)
+        a_file.close()
     #x=[torch.nn.functional.one_hot(torch.tensor(list(map(lambda a: od[a], [*vec]))), num_classes=len(dicset)) for vec in SmiData]
-    x = [np.concatenate((torch.nn.functional.one_hot(torch.tensor(list(map(lambda a: od[a], [*vec]))), num_classes=len(dicset)), torch.zeros(normalizeSize - len(vec), len(dicset))), axis=0) for vec
-         in SmiData]
-    return x,od
-def oneHotdecoder():
-    return
+        x = [np.concatenate((torch.nn.functional.one_hot(torch.tensor(list(map(lambda a: od[a], [*vec]))), num_classes=len(od)), torch.zeros(normalizeSize - len(vec), len(od))), axis=0) for vec
+             in SmiData]
+
+    od=od
+    return x
+def oneHotdecoder(onehotData,dic):
+
+    dic_swap = {v: k for k, v in dic.items()}
+    #print(dic_swap)
+    #print(onehotData[0].argmax(-1))
+    return["".join(map(str, list(map(lambda a: dic_swap[a], ids.argmax(-1))))) for ids in onehotData]
+
 #task='do_prop_pred'or'AE_only'
 def Smiles2dataset(params):
     datasets=loadDataset(params['Dataname'],params['FromDeepchem'],params['featurizer'])
     train_dataset, valid_dataset, test_dataset = datasets
-    TRSmiOnehot,TRSmiDic=oneHotencoder( train_dataset.ids,params['normalizeSize'])
-    TSmiOnehot, TSmiDic = oneHotencoder(test_dataset.ids[:1000], params['normalizeSize'])
+
+    TRSmiOnehot=oneHotencoder( train_dataset.ids,params['normalizeSize'])
+    TSmiOnehot= oneHotencoder(test_dataset.ids[:100], params['normalizeSize'])
+
     X_train, X_test= TRSmiOnehot, TSmiOnehot
+
     if params['do_prop_pred']:
         Y_train=[caculateLSvalue(pre) for pre in train_dataset.ids]
-        Y_test=[caculateLSvalue(pre) for pre in test_dataset.ids[:1000]]
+        Y_test=[caculateLSvalue(pre) for pre in test_dataset.ids[:100]]
+        #Y_test=0
         #print(Y_train)
         return X_train, X_test, Y_train, Y_test
     else:
@@ -77,7 +102,9 @@ if __name__ == '__main__':
 
     params = hyperparameters.load_params(args['exp_file'])
     #print("All params:", params)
-    #Smiles2dataset(params)
+    a,b=Smiles2dataset(params)
+
+    #print(oneHotdecoder(b,od))
 
 
 

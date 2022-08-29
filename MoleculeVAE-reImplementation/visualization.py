@@ -26,6 +26,7 @@ import zipfile
 import torch
 from sklearn.preprocessing import OneHotEncoder
 import h5py
+import pickle
 
 from model import MolecularVAE
 def oneHotencoder(SmiData,normalizeSize):
@@ -47,7 +48,14 @@ model = MolecularVAE().to(device)
 model.load_state_dict(torch.load('param.pth'))
 
 output, mean, logvar,pre = model(torch.from_numpy((np.array(TSmiOnehot[:100]))).to(dtype=torch.float32, device=device))
+from dataloader import  oneHotdecoder
+from dataloader import od
 
-from sklearn.decomposition import PCA
-pca = PCA(n_components=2)
-mol_data=pca.fit_transform(output.cpu().detach().numpy()[0])
+a_file = open("Dicdata.pkl", "rb")
+od = pickle.load(a_file)
+a_file.close()
+
+print(oneHotdecoder(output.cpu().detach().numpy(),od))
+#from sklearn.decomposition import PCA
+#pca = PCA(n_components=2)
+#mol_data=pca.fit_transform(output.cpu().detach().numpy()[0])

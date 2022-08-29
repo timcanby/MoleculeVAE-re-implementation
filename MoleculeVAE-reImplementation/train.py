@@ -26,6 +26,11 @@ import zipfile
 import torch
 from sklearn.preprocessing import OneHotEncoder
 import h5py
+from dataloader import  oneHotdecoder
+from dataloader import od
+import h5py
+import pickle
+
 def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
     xent_loss = nn.MSELoss()
     vecloss=xent_loss (x_decoded_mean,x)
@@ -52,8 +57,17 @@ def train(epochs):
             if batch_idx % 1000 == 0:
                 torch.save(model.state_dict(), 'param.pth')
                 print(f'{epochs} / {batch_idx}\t{loss:.4f}')
-        print('train', train_loss / len(train_loader.dataset))
-        return train_loss / len(train_loader.dataset)
+                with torch.no_grad():
+                    for data in test_loader:
+                        smidata, labels = data
+                        output, mean, logvar,pre = model(smidata.to(dtype=torch.float32, device=device))
+                        a_file = open("Dicdata.pkl", "rb")
+                        od = pickle.load(a_file)
+                        a_file.close()
+                        print(oneHotdecoder(smidata[:1].cpu().detach().numpy(), od))
+                        print(oneHotdecoder(output[:1].cpu().detach().numpy(), od))
+
+
     else:
         for batch_idx, data in enumerate(train_loader):
             data = data.to(dtype=torch.float32, device=device)
@@ -99,8 +113,11 @@ if __name__ == '__main__':
     if params['do_prop_pred']:
         X_train, X_test, Y_train, Y_test = Smiles2dataset(params)
         text_labels_df = pd.DataFrame({'Smi': X_train, 'PreLabel': Y_train})
+        test_labels_df = pd.DataFrame({'Smi': X_test, 'PreLabel': Y_test})
         dataset= CustomTextDataset(text_labels_df['Smi'],text_labels_df['PreLabel'])
+        testDataset=CustomTextDataset(test_labels_df['Smi'],test_labels_df['PreLabel'])
         train_loader = torch.utils.data.DataLoader(dataset, batch_size=params['batch_size'])
+        test_loader=torch.utils.data.DataLoader(testDataset)
 
     else:
         X_train, X_test = Smiles2dataset(params)
