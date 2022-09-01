@@ -1,36 +1,19 @@
-import torch
 import numpy as np
-import deepchem as dc
-from rdkit import Chem
 from rdkit import rdBase, Chem
-from rdkit.Chem import AllChem, Descriptors
 print(rdBase.rdkitVersion)
 import pandas as pd
-import seaborn as sns
 import os
 import sys
-from rdkit.Chem import QED
 import hyperparameters
 sys.path.append(os.path.join(Chem.RDConfig.RDContribDir, 'SA_Score'))
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.data
-import sascorer
 import argparse
-from collections import OrderedDict
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from sklearn import model_selection
-import zipfile
 import torch
-from sklearn.preprocessing import OneHotEncoder
-import h5py
-from dataloader import  oneHotdecoder
-from dataloader import od
-import h5py
-import pickle
 
+import pickle
+from model import MolecularVAE
 def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
     xent_loss = nn.MSELoss()
     vecloss=xent_loss (x_decoded_mean,x)
@@ -40,8 +23,14 @@ def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
 def train(epochs):
     model.train()
     train_loss = 0
-
     if params['do_prop_pred']:
+        X_train, X_test, Y_train, Y_test = Smiles2dataset(params)
+        text_labels_df = pd.DataFrame({'Smi': X_train, 'PreLabel': Y_train})
+        test_labels_df = pd.DataFrame({'Smi': X_test, 'PreLabel': Y_test})
+        dataset = CustomTextDataset(text_labels_df['Smi'], text_labels_df['PreLabel'])
+        testDataset = CustomTextDataset(test_labels_df['Smi'], test_labels_df['PreLabel'])
+        train_loader = torch.utils.data.DataLoader(dataset, batch_size=params['batch_size'])
+        test_loader = torch.utils.data.DataLoader(testDataset)
         for batch_idx, (data,label) in enumerate(train_loader):
             data = data.to(dtype=torch.float32, device=device)
             label=torch.from_numpy(np.array(label)).to(device=device)
@@ -64,11 +53,13 @@ def train(epochs):
                         a_file = open("Dicdata.pkl", "rb")
                         od = pickle.load(a_file)
                         a_file.close()
-                        print(oneHotdecoder(smidata[:1].cpu().detach().numpy(), od))
-                        print(oneHotdecoder(output[:1].cpu().detach().numpy(), od))
+                        #print(oneHotdecoder(smidata[:1].cpu().detach().numpy(), od))
+                        #print(oneHotdecoder(output[:1].cpu().detach().numpy(), od))
 
 
     else:
+        X_train, X_test = Smiles2dataset(params)
+        train_loader = torch.utils.data.DataLoader(X_train, batch_size=params['batch_size'])
         for batch_idx, data in enumerate(train_loader):
             data = data.to(dtype=torch.float32, device=device)
             optimizer.zero_grad()
@@ -92,6 +83,7 @@ class CustomTextDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return self.X[idx], self.y[idx]
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-e', '--exp_file',
@@ -107,23 +99,12 @@ if __name__ == '__main__':
     torch.manual_seed(params['RAND_SEED'])
     epochs = params['epochs']
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    from model import MolecularVAE
     model = MolecularVAE().to(device)
     optimizer = optim.Adam(model.parameters())
-    if params['do_prop_pred']:
-        X_train, X_test, Y_train, Y_test = Smiles2dataset(params)
-        text_labels_df = pd.DataFrame({'Smi': X_train, 'PreLabel': Y_train})
-        test_labels_df = pd.DataFrame({'Smi': X_test, 'PreLabel': Y_test})
-        dataset= CustomTextDataset(text_labels_df['Smi'],text_labels_df['PreLabel'])
-        testDataset=CustomTextDataset(test_labels_df['Smi'],test_labels_df['PreLabel'])
-        train_loader = torch.utils.data.DataLoader(dataset, batch_size=params['batch_size'])
-        test_loader=torch.utils.data.DataLoader(testDataset)
 
-    else:
-        X_train, X_test = Smiles2dataset(params)
-        train_loader = torch.utils.data.DataLoader(X_train, batch_size=params['batch_size'])
     for epoch in range(1, epochs + 1):
         train_loss = train(epoch)
+
 
 
 
