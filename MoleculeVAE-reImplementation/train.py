@@ -11,16 +11,18 @@ import torch.utils.data
 import argparse
 import torch.optim as optim
 import torch
-
+from dataloader import oneHotdecoder
 import pickle
 from model import MolecularVAE
+from torch.utils.data import Dataset, DataLoader
 def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
     xent_loss = nn.MSELoss()
     vecloss=xent_loss (x_decoded_mean,x)
     kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
     return vecloss + kl_loss
 
-def train(epochs):
+def train(epochs,od):
+    od = od
     model.train()
     train_loss = 0
     if params['do_prop_pred']:
@@ -50,11 +52,8 @@ def train(epochs):
                     for data in test_loader:
                         smidata, labels = data
                         output, mean, logvar,pre = model(smidata.to(dtype=torch.float32, device=device))
-                        a_file = open("Dicdata.pkl", "rb")
-                        od = pickle.load(a_file)
-                        a_file.close()
-                        #print(oneHotdecoder(smidata[:1].cpu().detach().numpy(), od))
-                        #print(oneHotdecoder(output[:1].cpu().detach().numpy(), od))
+                        print(oneHotdecoder(smidata[:1].cpu().detach().numpy(), od))
+                        print(oneHotdecoder(output[:1].cpu().detach().numpy(), od))
 
 
     else:
@@ -73,7 +72,7 @@ def train(epochs):
         print('train', train_loss / len(train_loader.dataset))
         return train_loss / len(train_loader.dataset)
 
-from torch.utils.data import Dataset, DataLoader
+
 class CustomTextDataset(torch.utils.data.Dataset):
     def __init__(self,x,y):
         self.X = x
@@ -101,9 +100,12 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = MolecularVAE().to(device)
     optimizer = optim.Adam(model.parameters())
+    with open("Dicdata.pkl", "rb") as a_file:
+        od = pickle.load(a_file)
+
 
     for epoch in range(1, epochs + 1):
-        train_loss = train(epoch)
+        train_loss = train(epoch,od)
 
 
 
