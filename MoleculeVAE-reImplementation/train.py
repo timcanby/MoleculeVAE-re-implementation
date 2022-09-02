@@ -65,7 +65,8 @@ def train(epochs):
             train_loss += loss
             optimizer.step()
             if batch_idx % 1000 == 0:
-             print(f'{epochs} / {batch_idx}\t{loss:.4f}')
+                torch.save(model.state_dict(), 'Weights/param(Without_pro-pretiction).pth')
+                print(f'{epochs} / {batch_idx}\t{loss:.4f}')
         print('train', train_loss / len(train_loader.dataset))
         return train_loss / len(train_loader.dataset)
 

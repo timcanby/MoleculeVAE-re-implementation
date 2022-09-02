@@ -51,9 +51,7 @@ output, mean, logvar,pre = model(torch.from_numpy((np.array(TSmiOnehot[:100]))).
 from dataloader import  oneHotdecoder
 from dataloader import od
 
-a_file = open("Dicdata.pkl", "rb")
-od = pickle.load(a_file)
-a_file.close()
+
 
 print(oneHotdecoder(output.cpu().detach().numpy(),od))
 #from sklearn.decomposition import PCA
