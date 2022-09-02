@@ -10,7 +10,7 @@ import torch
 import torch.utils.data
 import sascorer
 import argparse
-from collections import OrderedDict
+
 import json
 import collections
 
