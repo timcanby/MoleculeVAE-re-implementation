@@ -12,7 +12,6 @@ import argparse
 import torch.optim as optim
 import torch
 from dataloader import oneHotdecoder
-import pickle
 from model import MolecularVAE
 from torch.utils.data import Dataset, DataLoader
 def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
@@ -21,12 +20,12 @@ def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
     kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
     return vecloss + kl_loss
 
-def train(epochs,od):
-    od = od
+def train(epochs):
+
     model.train()
     train_loss = 0
     if params['do_prop_pred']:
-        X_train, X_test, Y_train, Y_test = Smiles2dataset(params)
+        X_train, X_test, Y_train, Y_test,od = Smiles2dataset(params)
         text_labels_df = pd.DataFrame({'Smi': X_train, 'PreLabel': Y_train})
         test_labels_df = pd.DataFrame({'Smi': X_test, 'PreLabel': Y_test})
         dataset = CustomTextDataset(text_labels_df['Smi'], text_labels_df['PreLabel'])
@@ -36,7 +35,6 @@ def train(epochs,od):
         for batch_idx, (data,label) in enumerate(train_loader):
             data = data.to(dtype=torch.float32, device=device)
             label=torch.from_numpy(np.array(label)).to(device=device)
-            #label=torch.tensor(label).to(dtype=torch.float32, device=device)
             optimizer.zero_grad()
             output, mean, logvar,pre = model(data.float())
             pre_loss_ca=nn.MSELoss()
@@ -57,7 +55,7 @@ def train(epochs,od):
 
 
     else:
-        X_train, X_test = Smiles2dataset(params)
+        X_train, X_test,od = Smiles2dataset(params)
         train_loader = torch.utils.data.DataLoader(X_train, batch_size=params['batch_size'])
         for batch_idx, data in enumerate(train_loader):
             data = data.to(dtype=torch.float32, device=device)
@@ -100,17 +98,7 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = MolecularVAE().to(device)
     optimizer = optim.Adam(model.parameters())
-    with open("Dicdata.pkl", "rb") as a_file:
-        od = pickle.load(a_file)
-
-
     for epoch in range(1, epochs + 1):
-        train_loss = train(epoch,od)
-
-
-
-
-
-
+        train_loss = train(epoch)
 
 
