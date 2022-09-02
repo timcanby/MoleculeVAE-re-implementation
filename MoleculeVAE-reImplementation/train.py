@@ -14,6 +14,15 @@ import torch
 from dataloader import oneHotdecoder
 from model import MolecularVAE
 from torch.utils.data import Dataset, DataLoader
+
+class CustomTextDataset(torch.utils.data.Dataset):
+    def __init__(self,x,y):
+        self.X = x
+        self.y = torch.tensor(y)
+    def __len__(self):
+        return len(self.X)
+    def __getitem__(self, idx):
+        return self.X[idx], self.y[idx]
 def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
     xent_loss = nn.MSELoss()
     vecloss=xent_loss (x_decoded_mean,x)
@@ -71,14 +80,6 @@ def train(epochs):
         return train_loss / len(train_loader.dataset)
 
 
-class CustomTextDataset(torch.utils.data.Dataset):
-    def __init__(self,x,y):
-        self.X = x
-        self.y = torch.tensor(y)
-    def __len__(self):
-        return len(self.X)
-    def __getitem__(self, idx):
-        return self.X[idx], self.y[idx]
 
 
 if __name__ == '__main__':
