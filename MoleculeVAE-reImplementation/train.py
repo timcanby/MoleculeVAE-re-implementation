@@ -44,7 +44,7 @@ def train(epochs):
             train_loss += loss
             optimizer.step()
             if batch_idx % 1000 == 0:
-                torch.save(model.state_dict(), 'param.pth')
+                torch.save(model.state_dict(), 'Weights/param.pth')
                 print(f'{epochs} / {batch_idx}\t{loss:.4f}')
                 with torch.no_grad():
                     for data in test_loader:
@@ -52,7 +52,6 @@ def train(epochs):
                         output, mean, logvar,pre = model(smidata.to(dtype=torch.float32, device=device))
                         print(oneHotdecoder(smidata[:1].cpu().detach().numpy(), od))
                         print(oneHotdecoder(output[:1].cpu().detach().numpy(), od))
-
 
     else:
         X_train, X_test,od = Smiles2dataset(params)
