@@ -13,16 +13,17 @@ import torch.optim as optim
 import torch
 from dataloader import oneHotdecoder
 from model import MolecularVAE
-from torch.utils.data import Dataset, DataLoader
 
+list=[]
 class CustomTextDataset(torch.utils.data.Dataset):
     def __init__(self,x,y):
-        self.X = x
-        self.y = torch.tensor(y)
+        self.X = torch.tensor(np.squeeze(x))
+        self.y = torch.tensor(np.squeeze(y))
     def __len__(self):
         return len(self.X)
     def __getitem__(self, idx):
         return self.X[idx], self.y[idx]
+
 def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
     xent_loss = nn.MSELoss()
     vecloss=xent_loss (x_decoded_mean,x)
@@ -35,17 +36,17 @@ def train(epochs):
     train_loss = 0
     if params['do_prop_pred']:
         X_train, X_test, Y_train, Y_test,od = Smiles2dataset(params)
-        text_labels_df = pd.DataFrame({'Smi': X_train, 'PreLabel': Y_train})
-        test_labels_df = pd.DataFrame({'Smi': X_test, 'PreLabel': Y_test})
+        text_labels_df = pd.DataFrame({'Smi': [X_train], 'PreLabel': [Y_train]})
+        test_labels_df = pd.DataFrame({'Smi': [X_test], 'PreLabel': [Y_test]})
         dataset = CustomTextDataset(text_labels_df['Smi'], text_labels_df['PreLabel'])
         testDataset = CustomTextDataset(test_labels_df['Smi'], test_labels_df['PreLabel'])
         train_loader = torch.utils.data.DataLoader(dataset, batch_size=params['batch_size'])
         test_loader = torch.utils.data.DataLoader(testDataset)
         for batch_idx, (data,label) in enumerate(train_loader):
             data = data.to(dtype=torch.float32, device=device)
-            label=torch.from_numpy(np.array(label)).to(device=device)
+            label=torch.from_numpy(np.array(label)).to(device=device,dtype=torch.float32)
             optimizer.zero_grad()
-            output, mean, logvar,pre = model(data.float())
+            output, mean, logvar,pre = model(data)
             pre_loss_ca=nn.MSELoss()
             pre_loss=pre_loss_ca(pre,label)
             loss = vae_loss(output.to(torch.float32), data, mean, logvar)+pre_loss
@@ -59,8 +60,15 @@ def train(epochs):
                     for data in test_loader:
                         smidata, labels = data
                         output, mean, logvar,pre = model(smidata.to(dtype=torch.float32, device=device))
+                        mae = nn.L1Loss()
                         print(oneHotdecoder(smidata[:1].cpu().detach().numpy(), od))
                         print(oneHotdecoder(output[:1].cpu().detach().numpy(), od))
+
+                        mae_logP=mae(labels[:, 0].to(device),pre[:, 0].to(device))
+                        mae_qed=mae(labels[:, 1].to(device),pre[:, 1].to(device))
+                        mae_SAS=mae(labels[:, 2].to(device),pre[:, 2].to(device))
+
+                        list.append([epochs,torch.mean((pre[:, 0])),torch.mean((pre[:, 1])),torch.mean((pre[:, 2])),mae_logP, mae_qed,mae_SAS])
 
     else:
         X_train, X_test,od = Smiles2dataset(params)
@@ -101,5 +109,7 @@ if __name__ == '__main__':
     optimizer = optim.Adam(model.parameters())
     for epoch in range(1, epochs + 1):
         train_loss = train(epoch)
+        df = pd.DataFrame(list, columns=['epoch','logP', 'qed', 'SAS', 'mae_logP', 'mae_qed', 'mae_SAS'])
+        df.to_csv('trainingprocess.csv')
 
 
