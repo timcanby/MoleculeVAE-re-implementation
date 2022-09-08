@@ -1,5 +1,9 @@
 from setuptools import setup
+import setuptools
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
+print(setuptools.find_packages(exclude=[]))
 setup(
     name='MoleculeVAE-re-implementation',
     version='1.0.0',
@@ -8,7 +12,6 @@ setup(
     url='https://github.com/timcanby/MoleculeVAE-re-implementation',
     license='',
     author='kangyingli',
-    author_email='kangyinglee0501@gmail.com',
     install_requires=[
         'setuptools == 49.2.1',
         'deepchem == 2.6.1',
