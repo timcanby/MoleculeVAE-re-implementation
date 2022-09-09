@@ -33,19 +33,22 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from rdkit.Chem import QED
 
-def load_dataset_from_file():
-    ...
-
-def load_dataset_from_deepchem():
-    ...
-
 def loadDataset(dataset=None,from_deepchem=True,featurizer='ECFP'):
     """Loads dataset, either from from deepchem or from local file system.
 
     - Inputs:
         - dataset:
-          """
+
+    could also split up further as:
+    def load_dataset_from_file():
+        ...
+
+    def load_dataset_from_deepchem():
+        ...
+
+    """
     if from_deepchem:
+        # TODO: move this import out
         import deepchem as dc
         tasks, datasets, transformers = dc.molnet.load_qm8(featurizer=featurizer)
 
