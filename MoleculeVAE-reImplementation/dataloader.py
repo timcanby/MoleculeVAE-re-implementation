@@ -190,10 +190,10 @@ def extract_properties_value(smile_onehot, smile_string):
             properties_dic = json.load(json_file)
             for x, s_string in zip(smile_onehot, smile_string):
                 try:
-                    y=properties_dic[x]
+                    y=properties_dic[str(s_string)]
                 except:
                     y = caculate_target_values(s_string)
-                    properties_dic[x]=y
+                    properties_dic[str(s_string)]=y
                 X_final.append(x)
                 Y_values.append(y)
                 label.append(s_string)
