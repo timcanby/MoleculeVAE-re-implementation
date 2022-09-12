@@ -1,120 +1,218 @@
-import torch
-import numpy as np
-import deepchem as dc
-from rdkit import Chem
+
 from rdkit import rdBase, Chem
-from rdkit.Chem import AllChem, Descriptors
+
 print(rdBase.rdkitVersion)
 import pandas as pd
-import seaborn as sns
 import os
 import sys
-from rdkit.Chem import QED
 import hyperparameters
 sys.path.append(os.path.join(Chem.RDConfig.RDContribDir, 'SA_Score'))
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
 import sascorer
 import argparse
-from collections import OrderedDict
 import json
-import h5py
 import collections
-import smilite
-from collections import OrderedDict
-import urllib
-import requests
-from bs4 import BeautifulSoup
-import re
-#defualt=Fingerprint dataset
 import numpy as np
 from sklearn.model_selection import train_test_split
 from rdkit.Chem import QED
-def loadDataset(Dataset=None,FromDeepchem=True,featurizer='ECFP'):
-    if FromDeepchem:
-        import deepchem as dc
-        tasks, datasets, transformers = dc.molnet.load_qm8(featurizer=featurizer)
+import deepchem as dc
 
-        return datasets
+
+'''
+**Constant:SMILES_CHARACTER_DIC
+Unlike dictionary used by https://github.com/aksub99/molecular-vae 
+
+Authors mentioned their SMILES-based text encoding used a subset of
+35 different characters for ZINC and 22 different characters for QM9. 
+Actually there are more than 24 characters in QM9 Dataset.
+
+In Update version using 35 characters
+'''
+SMILES_CHARACTER_DIC=["S", "B", "\n", "P", "3", "s",
+                      "O", "=", ")", "l", "r", "[",
+                      "5", "2", "\\", "F", "]", "1",
+                      "N", "8", "-", "c", "4", "6",
+                      "#", "n", "/", "+", "o", "I",
+                      "C", "H", "@", "(", "7","."]
+
+
+'''
+Read in data:
+This project provides two ways to read files, one is to read from a local file(.csv),
+the other is to read from Molecule Net (https://moleculenet.org/)
+From local:load_dataset_from_file()
+From MoleculeNet:load_dataset_from_deepchem():
+
+Use load_dataset() to load them
+'''
+def load_dataset_from_file(data_path):
+    """Loads dataset from local file.
+        - Inputs:
+            -path: default='Data/250k_rndm_zinc_drugs_clean_3.csv'
+        - Outputs:
+            - dataset: type=pandas object
+              """
+    return pd.read_csv(data_path)
+
+def load_dataset_from_deepchem(featurizer):
+    """Loads dataset from deepcm Default QM9.
+        -
+            -featurizer: whether use dataset from moleculeNet type=Boolean value default=True
+        - Outputs:
+            - dataset: type=list
+              """
+    tasks, datasets, transformers = dc.molnet.load_qm9(featurizer=featurizer)
+    return datasets
+
+
+def load_dataset(dataset=None,from_deepchem=True,featurizer='ECFP'):
+    """Loads dataset, either from deepchem or from local file system.
+        - Inputs:
+            -dataset:path to local dataset
+            -from_deepchem: whether use dataset from moleculeNet type=Boolean value default=True
+            -featurizer: default='ECFP'
+        - Outputs:
+            - dataset: type=list
+              """
+    if from_deepchem:
+        return  load_dataset_from_deepchem(featurizer)
     else:
-        Datapath=Dataset
-        return pd.read_csv(Datapath)
+        return load_dataset_from_file(data_path=dataset)
 
-#calculate Y.dataset for latenspace predictor
-def get_zinc_smile(zinc_id):
-    url = "https://zinc.docking.org/substances/"+str(zinc_id)+"/"
-    req = requests.get(url)
-    soup = BeautifulSoup(req.content, 'html.parser')
-    div=soup.find(id="substance-smiles-field")
-    print(str(div))
-    smile_str = re.search('[^value]+$', str(div)).group().split("\"")[1]
-    return smile_str
-def caculateLSvalue(Smiles):
-    try:
-        if "ZIN" in Smiles:
-            m = Chem.MolFromSmiles(str(get_zinc_smile(Smiles)))
-        else:m = Chem.MolFromSmiles(Smiles)
-    except:return 0,0,0
-    logP = Chem.Descriptors.MolLogP(m)
-    QED = QED.default(m)
-    SAS = sascorer.calculateScore(m)
 
-    return logP, QED, SAS
-
-def oneHotencoder(SmiData,normalizeSize):
-
-    dicset=list(set([*''.join(SmiData)]))
+def one_hot_encoder(smile_data,normalize_size):
+    '''This is one hot embedding function
+    - Inputs:
+            -smile_data:list of smile string
+            -normalize_size: the maximum number of characters in a single smile string
+        - Outputs:
+            - one_hot_feature: one hot vector
+            - character_index_lookup_dict:'''
+    character_index_lookup_dict = load_character_index_lookup_dict()
+    one_hot_feature = [make_encoding_for_smiles(vec, character_index_lookup_dict, normalize_size) for vec
+         in smile_data]
+    return one_hot_feature,character_index_lookup_dict
+def load_character_index_lookup_dict():
+    """This is a dictionary that maps character to a unique index"""
     if os.path.exists('Dicdata.json'):
         with open('Dicdata.json') as json_file:
-            od = json.load(json_file)
-        x = [np.concatenate((torch.nn.functional.one_hot(torch.tensor(list(map(lambda a: od[a], [*vec]))), num_classes=len(od)), torch.zeros(normalizeSize - len(vec), len(od))), axis=0) for vec
-             in SmiData]
+            character_index_lookup_dict = json.load(json_file)
     else:
-        od = collections.OrderedDict([(a, list(dicset).index(a)) for a in dicset])
-        with open("Dicdata.json", "w") as outfile:
-            json.dump(od, outfile)
+        character_index_lookup_dict = collections.OrderedDict([(a, i) for i, a in enumerate(SMILES_CHARACTER_DIC)])
+    return character_index_lookup_dict
+def make_encoding_for_smiles(string_list, character_index_lookup_dict, normalize_size):
+    '''This is to convert string to one hot vector
+        - Inputs:
+            -string_list:list of smile string
+            -character_index_lookup_dict: a dictionary that maps character to a unique index
+            -normalize_size: the maximum number of characters in a single smile string
+        - Outputs:
+            - onehot_out: one hot vector
+          '''
 
-        x = [np.concatenate((torch.nn.functional.one_hot(torch.tensor(list(map(lambda a: od[a], [*vec]))), num_classes=len(od)), torch.zeros(normalizeSize - len(vec), len(od))), axis=0) for vec
-             in SmiData]
+    index_list=list(map(lambda a: character_index_lookup_dict[a], [*string_list]))
+    num_classes = len(character_index_lookup_dict)
+    one_hot_vector=torch.nn.functional.one_hot(torch.tensor(index_list), num_classes=num_classes)
+    padding_size = (0,0,0,normalize_size - len(string_list))  # pad last dim by 1 on each side
+    onehot_out = F.pad(one_hot_vector, padding_size , "constant", 0)
+    '''output shape=[normalize_size,len(character_index_lookup_dict)]'''
+    return onehot_out
 
-    return x,od
-def oneHotdecoder(onehotData,dic):
-    dic_swap = {v: k for k, v in dic.items()}
-    return["".join(map(str, list(map(lambda a: dic_swap[a], ids.argmax(-1))))) for ids in onehotData]
-
-#task='do_prop_pred'or'AE_only'
-def Smiles2dataset(params):
+def smile_to_dataset(params):
+    '''This is to load dataset for training'''
     if params['FromDeepchem']:
-        datasets=loadDataset(params['Data_file'],params['FromDeepchem'],params['featurizer'])
+        datasets = load_dataset(params['Data_file'], params['FromDeepchem'], params['featurizer'])
         train_dataset, valid_dataset, test_dataset = datasets
-        TRSmiOnehot,od=oneHotencoder( train_dataset.ids,params['normalizeSize'])
-        TSmiOnehot,od= oneHotencoder(test_dataset.ids, params['normalizeSize'])
-        X_train, X_test= TRSmiOnehot, TSmiOnehot
+        '''train_dataset.ids=smile string of molecule (ref:https://deepchem.readthedocs.io/en/latest/api_reference/moleculenet.html)'''
+        smi_onehot_train, character_index_lookup_dict = one_hot_encoder(train_dataset.ids, params['normalizeSize'])
+        smi_onehot_test, character_index_lookup_dict = one_hot_encoder(test_dataset.ids, params['normalizeSize'])
         if params['do_prop_pred']:
-            Y_train=[caculateLSvalue(pre) for pre in train_dataset.ids]
-            Y_test=[caculateLSvalue(pre) for pre in test_dataset.ids]
-            return X_train, X_test, Y_train, Y_test,od
+            X_train,Y_train=extract_properties_value(smi_onehot_train, train_dataset.ids)
+            X_test, Y_test = extract_properties_value(smi_onehot_test, test_dataset.ids)
+            return X_train, X_test, Y_train, Y_test, character_index_lookup_dict
         else:
-            return X_train, X_test,od
+            return smi_onehot_train, smi_onehot_test, character_index_lookup_dict
     else:
-
-        df = loadDataset(params['Data_file'], params['FromDeepchem'], params['featurizer'])
-        train_docs = df['smiles'].tolist()
-        logP = df["logP"].tolist()
-        QED = df["qed"].tolist()
-        SAS = df["SAS"].tolist()
-        train_docsy=np.stack(( logP, QED ,SAS), axis=-1)
-        X_train_s,X_test_s, Y_train, Y_test=train_test_split(train_docs,train_docsy)
-
-        X_train, od = oneHotencoder(X_train_s, params['normalizeSize'])
-        X_test, od = oneHotencoder( X_test_s, params['normalizeSize'])
+        datasets= load_dataset(params['Data_file'], params['FromDeepchem'], params['featurizer'])
+        train_docs = datasets['smiles'].tolist()
+        logP = datasets["logP"].tolist()
+        QED = datasets["qed"].tolist()
+        SAS = datasets["SAS"].tolist()
+        train_docsy = np.stack((logP, QED, SAS), axis=-1)
+        X_train_s, X_test_s, Y_train, Y_test = train_test_split(train_docs, train_docsy)
+        X_train, character_index_lookup_dict = one_hot_encoder(X_train_s, params['normalizeSize'])
+        X_test, character_index_lookup_dict = one_hot_encoder(X_test_s, params['normalizeSize'])
         if params['do_prop_pred']:
 
-            return X_train, X_test, Y_train, Y_test,od
+            return X_train, X_test, Y_train, Y_test, character_index_lookup_dict
         else:
-            return X_train, X_test,od
+            return X_train, X_test, character_index_lookup_dict
+
+def caculate_target_values(smiles):
+    """Calculates logP, QED and SAS for a smiles input;
+    - Inputs:
+        - smiles:
+          str. The smiles of the molecule for which we want to caluclate the values.
+    - Returns:
+        - logP:
+          water−octanol partition coefficient (logP) ref.
+        - QED
+          synthetic accessibility score (SAS)
+        - SAS
+          Estimation of Drug-likeness (QED)
+    If the molecule cannot be calculated by RDkit, returns error
+    These values calculated here sometimes disagree with the values given in the dataset from the original
+    dataset.
+    """
+    m = Chem.MolFromSmiles(smiles)
+    logp = Chem.Descriptors.MolLogP(m)
+    qed = QED.default(m)
+    sas = sascorer.calculateScore(m)
+
+    return logp, qed, sas
+
+def extract_properties_value(smile_onehot, smile_string):
+    '''Extract properties value for latent space prediction
+    - Inputs:
+        - smile_onehot: one hot vector for training.
+        - smile_string: corresponding smile string.
+    - Returns:
+        - X_final: one hot vector which has the corresponding properties value
+        - Y_values:properties value
+         '''
+    X_final = []
+    Y_values = []
+    label=[]
+    if os.path.exists('properties_value.json'):
+        with open('properties_value.json') as json_file:
+            properties_dic = json.load(json_file)
+            for x, s_string in zip(smile_onehot, smile_string):
+                try:
+                    y=properties_dic[x]
+                except:
+                    y = caculate_target_values(s_string)
+                    properties_dic[x]=y
+                X_final.append(x)
+                Y_values.append(y)
+                label.append(s_string)
+    else:
+        for x, s_string in zip(smile_onehot, smile_string):
+            try:
+                y = caculate_target_values(s_string)
+                print(y)
+            except:
+                continue
+            X_final.append(x)
+            Y_values.append(y)
+            label.append(s_string)
+            properties_dic = dict(zip(label, Y_values))
+    '''creat & update properties_value.json'''
+    with open('properties_value.json', "w") as outfile:
+        json.dump(str(properties_dic), outfile)
+    return X_final,Y_values
+
 
 
 if __name__ == '__main__':
@@ -128,6 +226,3 @@ if __name__ == '__main__':
         args['exp_file'] = os.path.join(args['directory'], args['exp_file'])
 
     params = hyperparameters.load_params(args['exp_file'])
-
-
-
