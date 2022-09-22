@@ -21,7 +21,7 @@ import deepchem as dc
 import ast
 
 '''
-**Constant:SMILES_CHARACTER_DIC
+**Constant:ALL_SMILES_CHARACTERS
 Unlike dictionary used by https://github.com/aksub99/molecular-vae 
 
 Authors mentioned their SMILES-based text encoding used a subset of
@@ -30,7 +30,7 @@ Actually there are more than 24 characters in QM9 Dataset.
 
 In Update version using 35 characters
 '''
-SMILES_CHARACTER_DIC = ["S", "B", "\n", "P", "3", "s",
+ALL_SMILES_CHARACTERS = ["S", "B", "\n", "P", "3", "s",
                         "O", "=", ")", "l", "r", "[",
                         "5", "2", "\\", "F", "]", "1",
                         "N", "8", "-", "c", "4", "6",
@@ -60,7 +60,7 @@ Use load_dataset() to load them
 def load_dataset_from_file(data_path):
     """Loads dataset from local file.
     - Inputs:
-        -path: default='Data/250k_rndm_zinc_drugs_clean_3.csv'
+        -path: 'Data/250k_rndm_zinc_drugs_clean_3.csv' or user-defined
     - Outputs:
         - dataset: type=pandas object
     """
@@ -74,11 +74,11 @@ def load_dataset_from_deepchem(featurizer):
     - Outputs:
         - dataset: type=list
     """
-    tasks, datasets, transformers = dc.molnet.load_qm9(featurizer=featurizer)
+    _, datasets, _ = dc.molnet.load_qm9(featurizer=featurizer)
     return datasets
 
 
-def load_dataset(dataset=None, from_deepchem=True, featurizer="ECFP"):
+def load_dataset(params):
     """Loads dataset, either from deepchem or from local file system.
     - Inputs:
         -dataset:path to local dataset
@@ -87,10 +87,45 @@ def load_dataset(dataset=None, from_deepchem=True, featurizer="ECFP"):
     - Outputs:
         - dataset: type=list
     """
-    if from_deepchem:
-        return load_dataset_from_deepchem(featurizer)
+    """This is to load dataset for training"""
+    if params["FromDeepchem"]:
+        datasets = load_dataset_from_deepchem(params["featurizer"])
+        train_dataset, valid_dataset, test_dataset = datasets
+        """train_dataset.ids=smile string of molecule (ref:https://deepchem.readthedocs.io/en/latest/api_reference/moleculenet.html)"""
+        smi_onehot_train, character_index_lookup_dict = one_hot_encoder(
+            train_dataset.ids, params["normalizeSize"]
+        )
+        smi_onehot_test, character_index_lookup_dict = one_hot_encoder(
+            test_dataset.ids, params["normalizeSize"]
+        )
+        if params["do_prop_pred"]:
+            X_train, Y_train = extract_properties_value(
+                smi_onehot_train, train_dataset.ids
+            )
+            X_test, Y_test = extract_properties_value(smi_onehot_test, test_dataset.ids)
+            return X_train, X_test, Y_train, Y_test, character_index_lookup_dict
+        else:
+            return smi_onehot_train, smi_onehot_test, character_index_lookup_dict
     else:
-        return load_dataset_from_file(data_path=dataset)
+        datasets = load_dataset_from_file(data_path=params["Data_file"])
+        train_docs = datasets["smiles"].tolist()
+        logP = datasets["logP"].tolist()
+        QED = datasets["qed"].tolist()
+        SAS = datasets["SAS"].tolist()
+        train_docsy = np.stack((logP, QED, SAS), axis=-1)
+        X_train_s, X_test_s, Y_train, Y_test = train_test_split(train_docs, train_docsy)
+        X_train, character_index_lookup_dict = one_hot_encoder(
+            X_train_s, params["normalizeSize"]
+        )
+        X_test, character_index_lookup_dict = one_hot_encoder(
+            X_test_s, params["normalizeSize"]
+        )
+        if params["do_prop_pred"]:
+
+            return X_train, X_test, Y_train, Y_test, character_index_lookup_dict
+        else:
+            return X_train, X_test, character_index_lookup_dict
+
 
 
 def one_hot_encoder(smile_data, normalize_size):
@@ -111,13 +146,8 @@ def one_hot_encoder(smile_data, normalize_size):
 
 def load_character_index_lookup_dict():
     """This is a dictionary that maps character to a unique index"""
-    if os.path.exists("Dicdata.json"):
-        with open("Dicdata.json") as json_file:
-            character_index_lookup_dict = json.load(json_file)
-    else:
-        character_index_lookup_dict = collections.OrderedDict(
-            [(a, i) for i, a in enumerate(SMILES_CHARACTER_DIC)]
-        )
+    character_index_lookup_dict = collections.OrderedDict(
+        [(a, i) for i, a in enumerate(ALL_SMILES_CHARACTERS)])
     return character_index_lookup_dict
 
 
@@ -146,50 +176,6 @@ def make_encoding_for_smiles(string_list, character_index_lookup_dict, normalize
     """output shape=[normalize_size,len(character_index_lookup_dict)]"""
     return onehot_out
 
-
-def smile_to_dataset(params):
-    """This is to load dataset for training"""
-    if params["FromDeepchem"]:
-        datasets = load_dataset(
-            params["Data_file"], params["FromDeepchem"], params["featurizer"]
-        )
-        train_dataset, valid_dataset, test_dataset = datasets
-        """train_dataset.ids=smile string of molecule (ref:https://deepchem.readthedocs.io/en/latest/api_reference/moleculenet.html)"""
-        smi_onehot_train, character_index_lookup_dict = one_hot_encoder(
-            train_dataset.ids, params["normalizeSize"]
-        )
-        smi_onehot_test, character_index_lookup_dict = one_hot_encoder(
-            test_dataset.ids, params["normalizeSize"]
-        )
-        if params["do_prop_pred"]:
-            X_train, Y_train = extract_properties_value(
-                smi_onehot_train, train_dataset.ids
-            )
-            X_test, Y_test = extract_properties_value(smi_onehot_test, test_dataset.ids)
-            return X_train, X_test, Y_train, Y_test, character_index_lookup_dict
-        else:
-            return smi_onehot_train, smi_onehot_test, character_index_lookup_dict
-    else:
-        datasets = load_dataset(
-            params["Data_file"], params["FromDeepchem"], params["featurizer"]
-        )
-        train_docs = datasets["smiles"].tolist()
-        logP = datasets["logP"].tolist()
-        QED = datasets["qed"].tolist()
-        SAS = datasets["SAS"].tolist()
-        train_docsy = np.stack((logP, QED, SAS), axis=-1)
-        X_train_s, X_test_s, Y_train, Y_test = train_test_split(train_docs, train_docsy)
-        X_train, character_index_lookup_dict = one_hot_encoder(
-            X_train_s, params["normalizeSize"]
-        )
-        X_test, character_index_lookup_dict = one_hot_encoder(
-            X_test_s, params["normalizeSize"]
-        )
-        if params["do_prop_pred"]:
-
-            return X_train, X_test, Y_train, Y_test, character_index_lookup_dict
-        else:
-            return X_train, X_test, character_index_lookup_dict
 
 
 def caculate_target_values(smiles):
@@ -232,21 +218,24 @@ def extract_properties_value(smile_onehot, smile_string):
         with open("properties_value.json", "r", encoding="utf-8") as json_file:
             properties_dic = ast.literal_eval(json.load(json_file))
 
-            for x, s_string in zip(smile_onehot, smile_string):
+        for x, s_string in zip(smile_onehot, smile_string):
+            if str(s_string) in properties_dic:
+                y = properties_dic[str(s_string)]
+            else:
                 try:
-                    y = properties_dic[str(s_string)]
-                except:
                     y = caculate_target_values(s_string)
                     temp_result = {str(s_string): y}
                     properties_dic.update(temp_result)
-                X_final.append(x)
-                Y_values.append(y)
-                label.append(s_string)
+                except:
+                    continue
+
+            X_final.append(x)
+            Y_values.append(y)
+            label.append(s_string)
     else:
         for x, s_string in zip(smile_onehot, smile_string):
             try:
                 y = caculate_target_values(s_string)
-
             except:
                 continue
             X_final.append(x)
@@ -270,3 +259,4 @@ if __name__ == "__main__":
         args["exp_file"] = os.path.join(args["directory"], args["exp_file"])
 
     params = hyperparameters.load_params(args["exp_file"])
+    '''For checking and update the parameters'''
