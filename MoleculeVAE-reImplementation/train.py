@@ -10,32 +10,30 @@ import torch.utils.data
 import argparse
 import torch.optim as optim
 import torch
+from dataloader import one_hot_encoder,one_hot_decoder
 from model import MolecularVAE
+from model import CustomMoleculeDataset
+from torch.utils.data import Dataset, DataLoader
 from dataloader import load_dataset
 import torch.utils.data as data
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import gif
 import warnings
 warnings.filterwarnings("ignore")
-
+from sklearn.decomposition import PCA, IncrementalPCA
+from scipy.spatial import geometric_slerp
+import time
 import os
 from datetime import datetime
 
 # dd/mm/YY H:M:S
 dt_string = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")
 print("date and time =", dt_string)
+#record_list for recording the loss value
+record_list=[]
 
-#list for recording the loss value
-list=[]
-'''This is for setting a custom dataset for pytorch Dataloder
-    ref.:https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
-'''
-class CustomMoleculeDataset(torch.utils.data.Dataset):
-    def __init__(self,smiles_string,properties_label):
-        self.smiles_string= smiles_string
-        self.properties_label = properties_label
-    def __len__(self):
-        return len(self.smiles_string)
-    def __getitem__(self, idx):
-        return self.smiles_string[idx], self.properties_label[idx]
 
 def split_validation_dataset(train_dataset,percentage_train):
     '''
