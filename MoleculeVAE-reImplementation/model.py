@@ -1,10 +1,4 @@
 
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.utils.data
-
-import torch
-
 
 
 class MolecularVAE(nn.Module):
@@ -13,14 +7,15 @@ class MolecularVAE(nn.Module):
         self.conv_1 = nn.Conv1d(120, 9, kernel_size=9)
         self.conv_2 = nn.Conv1d(9, 9, kernel_size=9)
         self.conv_3 = nn.Conv1d(9, 70, kernel_size=8)
-        self.linear_0 = nn.Linear(840, 435)
+        self.linear_0 = nn.Linear(910, 435)
         self.linear_1 = nn.Linear(435, 292)
         self.linear_2 = nn.Linear(435, 292)
         self.linear_3 = nn.Linear(292, 292)
         self.linear_p1 = nn.Linear(292, 100)
         self.linear_p2 = nn.Linear(100, 3)
+        self.visualize_z=nn.Linear(3,2)
         self.gru = nn.GRU(292, 501, 3, batch_first=True)
-        self.linear_4 = nn.Linear(501, 35)
+        self.linear_4 = nn.Linear(501, 36)
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax()
 
@@ -45,13 +40,33 @@ class MolecularVAE(nn.Module):
         y = y0.contiguous().view(output.size(0), -1, y0.size(-1))
 
         return y
-    def PredictProperties(self,z):
+    def predict_properties(self,z):
         z = F.selu(self.linear_3(z))
         z=F.selu(self.linear_p1(z))
         z=self.linear_p2(z)
         return z
 
     def forward(self, x):
+        '''
+
+        :param x:
+        :return: output of decoder,mean vector,variance vector,property predict result ,sampled vector from latent space
+        '''
         z_mean, z_logvar = self.encode(x)
         z = self.sampling(z_mean, z_logvar)
-        return self.decode(z), z_mean, z_logvar,self.PredictProperties(z)
+        return self.decode(z), z_mean, z_logvar,self.predict_properties(z),z
+
+
+
+'''This is for setting a custom dataset for pytorch Dataloder
+    ref.:https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
+'''
+class CustomMoleculeDataset(torch.utils.data.Dataset):
+    def __init__(self,smiles_string,properties_label):
+        self.smiles_string= smiles_string
+        self.properties_label = properties_label
+    def __len__(self):
+        return len(self.smiles_string)
+    def __getitem__(self, idx):
+        return self.smiles_string[idx], self.properties_label[idx]
+
