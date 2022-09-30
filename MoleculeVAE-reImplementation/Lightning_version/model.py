@@ -304,10 +304,10 @@ def main_no_prop(params):
         -test_dataset,
     '''
     X_train, X_test, character_index_lookup_dict = load_dataset(params)
-    train_dataset = CustomMoleculeDataset(X_train[:500], Y_train[:500])
+    train_dataset = CustomMoleculeDataset(X_train, Y_train)
     train_set_final, valid_set_final = split_validation_dataset(train_dataset, percentage_train=0.9)
 
-    test_dataset = CustomMoleculeDataset(X_test[:500], Y_test[:500])
+    test_dataset = CustomMoleculeDataset(X_test, Y_test)
     return train_set_final, valid_set_final, test_dataset
 
 
