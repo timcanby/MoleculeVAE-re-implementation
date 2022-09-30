@@ -2,28 +2,31 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
-import gzip
-import pandas
-import numpy as np
+
 import argparse
 import os
-import h5py
+
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from sklearn import model_selection
-import zipfile
+
+
 import torch
-from sklearn.preprocessing import OneHotEncoder
-import h5py
+
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import hyperparameters
-from torch.utils.data import Dataset, DataLoader
+
 from dataloader import load_dataset
 import torch.utils.data as data
-from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning import seed_everything
 
+from pytorch_lightning.loggers import CSVLogger
+import gif
+from datetime import datetime
+import matplotlib.pyplot as plt
+# dd/mm/YY H:M:S
+dt_string = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")
+print("date and time =", dt_string)
 class MolecularVAE(pl.LightningModule):
     def __init__(self):
         super(MolecularVAE, self).__init__()
@@ -41,6 +44,11 @@ class MolecularVAE(pl.LightningModule):
         self.linear_4 = nn.Linear(501, 36)
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax()
+        self.logp_frames = []
+        self.qed_frames = []
+        self.sas_frames = []
+        self.plot_vector = []
+        self.pre_plot = []
 
     def encode(self, x):
         x = self.relu(self.conv_1(x))
@@ -169,7 +177,8 @@ class MolecularVAE(pl.LightningModule):
         output, mean, logvar, pre, z = self(x.to(dtype=torch.float32))
         pre_loss_ca = nn.MSELoss()
         pre_loss = pre_loss_ca(pre, y.to(dtype=torch.float32))
-        loss = self.calculate_loss_by_type(output, x, mean, logvar, pre_loss, batch_idx)
+        loss = self.calculate_loss_by_type(output, x, mean, logvar, pre_loss, self.current_epoch)
+
         self.log("train_loss", loss)
         return {"loss":loss}
     def validation_step(self,batch,batch_idx):
@@ -178,7 +187,25 @@ class MolecularVAE(pl.LightningModule):
         output, mean, logvar, pre, z = self(x.to(dtype=torch.float32))
         pre_loss_ca = nn.MSELoss()
         pre_loss = pre_loss_ca(pre, y.to(dtype=torch.float32))
-        val_loss = self.calculate_loss_by_type(output, x, mean, logvar, pre_loss, batch_idx)
+        val_loss = self.calculate_loss_by_type(output, x, mean, logvar, pre_loss, self.current_epoch)
+        self.plot_vector.extend(z.cpu().detach().numpy())
+        self.pre_plot.extend(pre.cpu().detach().numpy())
+        '''===For plot visualization==='''
+        if batch_idx==0:
+            plot_vector = np.array(self.plot_vector)
+            pre_plot = np.array(self.pre_plot)
+            self.logp_frames.append(
+                self.plot3D(plot_vector[:, 0], plot_vector[:, 1], plot_vector[:, 2],pre_plot[:, 0],
+                       "logP", str(self.current_epoch), -7, 9))
+            self.qed_frames.append(
+                self.plot3D(plot_vector[:, 0],plot_vector[:, 1], plot_vector[:, 2], pre_plot[:, 1],
+                       "QED", str(self.current_epoch), 0, 1))
+            self.sas_frames.append(
+                self.plot3D(plot_vector[:, 0],plot_vector[:, 1],plot_vector[:, 2], pre_plot[:, 2],
+                       "SAS", str(self.current_epoch), 1, 8))
+            self.plot_vector=[]
+            self.pre_plot=[]
+
         self.log("val_loss", val_loss)
         return {"val_loss":val_loss}
 
@@ -188,9 +215,25 @@ class MolecularVAE(pl.LightningModule):
         output, mean, logvar, pre, z = self(x.to(dtype=torch.float32))
         pre_loss_ca = nn.MSELoss()
         pre_loss = pre_loss_ca(pre, y.to(dtype=torch.float32))
-        test_loss = self.calculate_loss_by_type(output, x, mean, logvar, pre_loss, batch_idx)
+        test_loss = self.calculate_loss_by_type(output, x, mean, logvar, pre_loss, self.current_epoch)
         self.log("test_loss", test_loss)
         return {"test_loss": test_loss}
+
+    @gif.frame
+    def plot3D(self,xi, yi, z, c, label, title, n_min, n_max):
+        data = pd.DataFrame(
+            {'x': xi, 'y': yi, 'z': z, 'c': c})
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        p = ax.scatter(data.x, data.y, data.z, c=data.c, alpha=0.6, s=10, cmap='YlGnBu', vmin=n_min, vmax=n_max)
+        ax.view_init(0, 45)
+        plt.colorbar(p, label=label)
+        # plt.axis('off')
+        plt.title('Epoch=' + title)
+    def save_gif(self):
+        gif.save(self.logp_frames, 'logp.gif', duration=150)
+        gif.save(self.qed_frames, 'qed.gif', duration=150)
+        gif.save(self.sas_frames, 'sas.gif', duration=150)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-3)
@@ -280,14 +323,12 @@ if __name__ == "__main__":
 
     params = hyperparameters.load_params(args['exp_file'])
     vae = MolecularVAE()
-    logger = CSVLogger("logs", name="my_exp_name")
+    logger = CSVLogger("logs", name=dt_string.replace('/','_'))
+    seed_everything(params['RAND_SEED'], workers=True)
     train_set_final, valid_set_final, test_dataset = main_property_run(params)
     #logger = TensorBoardLogger("tb_logs", name="my_model")
     #trainer=pl.Trainer(fast_dev_run=True)
-    trainer = pl.Trainer(logger=logger)
+    trainer = pl.Trainer(logger=logger,max_epochs=3,devices=1,accelerator="auto",weights_save_path="Weights")
+
     trainer.fit(vae,train_dataloaders=train_set_final,val_dataloaders=valid_set_final)
-    val_result = trainer.test(vae, dataloaders=valid_set_final)
-    test_result = trainer.test(vae, dataloaders=test_dataset)
-
-
-   # print(vae(torch.rand(1,120,36)))
+    vae.save_gif()
