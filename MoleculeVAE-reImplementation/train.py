@@ -31,94 +31,39 @@ from datetime import datetime
 # dd/mm/YY H:M:S
 dt_string = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")
 print("date and time =", dt_string)
-#record_list for recording the loss value
+
+
+'''Lists for recording experimental results'''
+#loss_record_list for recording the loss terms [epoch,vae_loss, reconstruction_loss, prediction_loss,process_type]
 record_list=[]
+#performance on separate prediction tasks [epoch,'logP_pre', 'qed_pre', 'SAS_pre', 'mae_logP', 'mae_qed', 'mae_SAS']
+separate_prediction_list=[]
+#list for record annealing performance [epoch,test_total_loss_with_annealing,test_total_loss_without_annealing,annealing_weights,process_type]
+list_for_record_annealing_performance=[]
 
 
-def split_validation_dataset(train_dataset,percentage_train):
-    '''
-     This is for building the train and validation datasets
-         - train_dataset:torch.utils.data.Dataset object
-         - percentage_train:percentage of training data default=0.9
-     - Returns:
-        -train_set_final: dataset for training
-        -valid_set_final: dataset for validation
-     '''
-    # use 20% of training data for validation
-    train_set_size = int(len(train_dataset) * percentage_train)
-    valid_set_size = len(train_dataset) - train_set_size
-    # split the train set into two
-    seed = torch.Generator().manual_seed(42)
-    train_set, valid_set = data.random_split(train_dataset, [train_set_size, valid_set_size], generator=seed)
-    train_set_final = torch.utils.data.DataLoader(train_set, batch_size=params['batch_size'])
-    valid_set_final = torch.utils.data.DataLoader(valid_set, batch_size=params['batch_size'])
+'''Module for visualization'''
+@gif.frame
+def plot3D(xi,yi,z,c,label,title,n_min,n_max):
+    data = pd.DataFrame(
+        {'x': xi, 'y': yi, 'z': z, 'c': c})
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    p=ax.scatter(data.x,data.y,data.z,c=data.c,alpha=0.6, s=10,cmap='YlGnBu', vmin=n_min, vmax=n_max)
+    ax.view_init(0, 45)
+    plt.colorbar(p,label=label)
+    #plt.axis('off')
+    plt.title('Epoch='+title)
 
-    return train_set_final,valid_set_final
-
-
-def main_property_run(params):
-    '''
-    This is for training process include property prediction
-        - Inputs: params (Use hyperparameters.load_params() to load params from expParam.json)
-    - Returns:
-        -train_set_final,
-        -valid_set_final,
-        -test_dataset,
-    '''
-    # load data
-    X_train, X_test, Y_train, Y_test, character_index_lookup_dict = load_dataset(params)
-    train_dataset=CustomMoleculeDataset(X_train,Y_train)
-    train_set_final, valid_set_final=split_validation_dataset(train_dataset,percentage_train=0.9)
-
-    test_dataset=CustomMoleculeDataset(X_test,Y_test)
-    return train_set_final, valid_set_final,test_dataset
-
-def main_no_prop(params):
-    '''
-    This is for training process which not include property prediction
-        - Inputs: params (Use hyperparameters.load_params() to load params from expParam.json)
-    - Returns:
-        -train_set_final,
-        -valid_set_final,
-        -test_dataset,
-    '''
-    X_train, X_test, character_index_lookup_dict = load_dataset(params)
-    train_dataset = CustomMoleculeDataset(X_train, Y_train)
-    train_set_final, valid_set_final = split_validation_dataset(train_dataset, percentage_train=0.9)
-
-    test_dataset = CustomMoleculeDataset(X_test, Y_test)
-    return train_set_final, valid_set_final,test_dataset
-
-def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
-    xent_loss = nn.MSELoss()
-    vecloss=xent_loss (x_decoded_mean.to(dtype=torch.float32, device=device),x.to(dtype=torch.float32, device=device))
-    kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
-    return vecloss + kl_loss
-
-def vae_loss_with_annealing(x_decoded_mean, x, z_mean, z_logvar,epoch):
-    '''
-    This is for calculating the loss value with added annealer
-        - Inputs: params (Use hyperparameters.load_params() to load params from expParam.json)
-        - Default :cycle sigmoid schedule
-
-    '''
-    xent_loss = nn.MSELoss()
-    vecloss=xent_loss (x_decoded_mean.to(dtype=torch.float32, device=device),x.to(dtype=torch.float32, device=device))
-    kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
-
-    if epoch>=params['vae_annealer_start']:
-        return vecloss + frange_cycle_sigmoid(0.0, 1.0, epoch, 1, 0.25)[0]*kl_loss
-    else:
-        return vecloss + kl_loss
 
 
 '''============cyclical_annealing for KL vanishing problem==================
-from paper: Cyclical Annealing Schedule: A Simple Approach to Mitigating KL Vanishing (NAACL 2019)
-paper link:https://arxiv.org/abs/1903.10145
-Github:https://github.com/haofuml/cyclical_annealing
+    from paper: Cyclical Annealing Schedule: A Simple Approach to Mitigating KL Vanishing (NAACL 2019)
+    paper link:https://arxiv.org/abs/1903.10145
+    Github:https://github.com/haofuml/cyclical_annealing
 
-KL vanishing:https://alibabatech.medium.com/next-gen-text-generation-alibaba-makes-progress-on-the-kl-vanishing-problem-77ec35f2afa2
-'''
+    KL vanishing:https://alibabatech.medium.com/next-gen-text-generation-alibaba-makes-progress-on-the-kl-vanishing-problem-77ec35f2afa2
+    '''
 
 def frange_cycle_linear(start, stop, n_epoch, n_cycle=4, ratio=0.5):
     L = np.ones(n_epoch)
@@ -166,29 +111,126 @@ def frange_cycle_cosine(start, stop, n_epoch, n_cycle=4, ratio=0.5):
             v += step
             i += 1
     return L
-
 '''====End of cyclical_annealing module================================'''
-def calculate_loss_by_type(decoder_output_data,input_string_data,z_mean,z_logvar,property_prediction_loss,epochs):
-    '''To calculate the loss value '''
-    pre_loss=property_prediction_loss
-    loss_type= params['loss_type']
-    if loss_type== "Variance_only":
-        loss = vae_loss(decoder_output_data, input_string_data, z_mean, z_logvar)
-    elif loss_type== "pro_prediction_only":
-        loss = -pre_loss
-    elif loss_type== "vae_pre_no_annealing":
-        loss = vae_loss(decoder_output_data, input_string_data, z_mean, z_logvar) + pre_loss
-    elif loss_type== "vae_pre_with_annealing":
-        loss = vae_loss_with_annealing(decoder_output_data, input_string_data, z_mean, z_logvar, epochs) + pre_loss
+
+
+'''Read in the training data according to whether the prediction task is performed or not'''
+def split_validation_dataset(train_dataset,percentage_train):
+    '''
+     This is for building the train and validation datasets
+         - train_dataset:torch.utils.data.Dataset object
+         - percentage_train:percentage of training data default=0.9
+     - Returns:
+        -train_set_final: dataset for training
+        -valid_set_final: dataset for validation
+     '''
+    # use 20% of training data for validation
+    train_set_size = int(len(train_dataset) * percentage_train)
+    valid_set_size = len(train_dataset) - train_set_size
+    # split the train set into two
+    seed = torch.Generator().manual_seed(42)
+    train_set, valid_set = data.random_split(train_dataset, [train_set_size, valid_set_size], generator=seed)
+    train_set_final = torch.utils.data.DataLoader(train_set, batch_size=params['batch_size'])
+    valid_set_final = torch.utils.data.DataLoader(valid_set, batch_size=params['batch_size'])
+
+    return train_set_final,valid_set_final
+
+
+def load_data_by_task(params):
+    '''
+            - Inputs: params (Use hyperparameters.load_params() to load params from expParam.json)
+        - Returns:
+        A pandas DataFrame include follow items:
+            -train_set_final,
+            -valid_set_final,
+            -test_dataset,
+        '''
+    if params['do_prop_pred']:
+        X_train, X_test, Y_train, Y_test, character_index_lookup_dict = load_dataset(params)
     else:
-        loss=None
+        X_train, X_test, character_index_lookup_dict = load_dataset(params)
+
+    train_dataset = CustomMoleculeDataset(X_train[:200], Y_train[:200])
+    train_set_final, valid_set_final = split_validation_dataset(train_dataset, percentage_train=0.9)
+    test_dataset = CustomMoleculeDataset(X_test[:200], Y_test[:200])
+    test_set_final, _ = split_validation_dataset(test_dataset, percentage_train=1)# To control the number of percentage
+    training_data_dic = pd.DataFrame(list(zip( train_set_final, valid_set_final, test_dataset )),
+                      columns=['train_set_final', 'valid_set_final', 'test_dataset'])
+    return training_data_dic
+
+
+
+'''Loss function '''
+
+def vae_loss(x_decoded_mean, x, z_mean, z_logvar):
+    xent_loss = nn.MSELoss()
+    vecloss=xent_loss (x_decoded_mean.to(dtype=torch.float32, device=device),x.to(dtype=torch.float32, device=device))
+    kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
+    record_list.append()
+    return vecloss,kl_loss
+
+def vae_loss_with_annealing(x_decoded_mean, x, z_mean, z_logvar):
+    '''
+    This is for calculating the loss value with added annealer
+        - Inputs: params (Use hyperparameters.load_params() to load params from expParam.json)
+        - Default :cycle sigmoid schedule
+
+    '''
+    xent_loss = nn.MSELoss()
+    vecloss=xent_loss (x_decoded_mean.to(dtype=torch.float32, device=device),x.to(dtype=torch.float32, device=device))
+    kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
+    if epoch>=params['vae_annealer_start']:
+
+        return vecloss,frange_cycle_sigmoid(0.0, 1.0, epoch, 1, 0.25)[0],kl_loss
+    else:
+        return vecloss,1,kl_loss
+
+
+def calculate_loss_by_type(decoder_output_data, input_string_data, z_mean, z_logvar, property_prediction_loss, epochs,process_type):
+    '''To calculate the loss value '''
+    pre_loss = property_prediction_loss
+    loss_type = params['loss_type']
+    if loss_type == "Variance_only":
+        loss = vae_loss(decoder_output_data, input_string_data, z_mean, z_logvar)
+    elif loss_type == "pro_prediction_only":
+        loss = pre_loss
+
+    elif loss_type == "vae_pre_no_annealing":
+        vecloss,kl_loss = vae_loss(decoder_output_data, input_string_data, z_mean, z_logvar)
+        #TODO:scaling factor
+        vae_loss=vecloss+kl_loss
+        loss=vae_loss + pre_loss
+        #record_list.append([epochs, vae_loss, reconstruction_loss, prediction_loss, process_type])
+        record_list.append([epochs, vae_loss.cpu().detach().numpy(),vecloss.cpu().detach().numpy(),kl_loss.cpu().detach().numpy(), pre_loss.cpu().detach().numpy(), process_type])
+    elif loss_type == "vae_pre_with_annealing":
+        vecloss,anealing_weight,kl_loss_original = vae_loss_with_annealing(decoder_output_data, input_string_data, z_mean, z_logvar)
+        kl_loss=anealing_weight*kl_loss_original
+        # TODO:scaling factor
+        vae_loss = vecloss + kl_loss
+        loss = vae_loss + pre_loss
+
+        # list for record annealing performance
+        list_for_record_annealing_performance.append([epochs,kl_loss.cpu().detach().numpy(),kl_loss_original.cpu().detach().numpy(),anealing_weight,process_type])
+        record_list.append( [epochs, vae_loss.cpu().detach().numpy(), vecloss.cpu().detach().numpy(), kl_loss.cpu().detach().numpy(),
+             pre_loss.cpu().detach().numpy(), process_type])
+
+
+    else:
+        loss = None
     return loss
+
+
+'''========================End of loss module=========================='''
+
+
+'''Train & Test func.'''
 
 def train(epochs,train_set_final, valid_set_final):
     model.train()
     train_loss = 0
-    valid_loss=0
-    epoch_save_update=True
+    valid_loss = 0
+    epoch_save_update = True
+    record_experimental_loss=True
     if params['do_prop_pred']:
         for batch_idx, (data,label) in enumerate(train_set_final):
             data = data.to(dtype=torch.float32, device=device)
@@ -197,40 +239,48 @@ def train(epochs,train_set_final, valid_set_final):
             output, mean, logvar,pre,z = model(data)
             pre_loss_ca=nn.MSELoss()
             pre_loss=pre_loss_ca(pre,label)
-            loss=calculate_loss_by_type(output,data, mean, logvar,pre_loss,epochs)
+            loss=calculate_loss_by_type(output,data, mean, logvar,pre_loss,epochs,'train')
             loss.backward()
             train_loss += loss
             optimizer.step()
-            if batch_idx % len(train_set_final)== 0:
-
+            if batch_idx % len(train_set_final) == 0:
                 with torch.no_grad():
                     for data in valid_set_final:
                         valid_smidata, valid_labels = data
-                        valid_output, valid_mean, valid_logvar,valid_pre,valid_z = model(valid_smidata.to(dtype=torch.float32, device=device))
+                        valid_output, valid_mean, valid_logvar, valid_pre, valid_z = model(valid_smidata.to(dtype=torch.float32, device=device))
                         valid_pre_loss_ca = nn.MSELoss()
                         valid_pre_loss = valid_pre_loss_ca(valid_pre, valid_labels.to(dtype=torch.float32, device=device))
-                        valid_loss += calculate_loss_by_type(valid_output,valid_smidata,valid_mean,valid_logvar,valid_pre_loss,epochs)
-                        if valid_loss>=10:
-                            epoch_save_update=False
-                    if epoch_save_update:
-                        torch.save(model.state_dict(), 'Weights/' + str(dt_string.replace("/", '_')) + str(epochs)+'_total120_epochs_with_stop_full_vae_pre_annealing_param.pth')
+                        valid_loss+= calculate_loss_by_type(valid_output, valid_smidata, valid_mean, valid_logvar,valid_pre_loss, epochs,'valid')
+                    #if epoch_save_update:
+                        #torch.save(model.state_dict(), 'Weights/' + str(dt_string.replace("/", '_')) + str(epochs) + '_param.pth')
 
                     print(f'{epochs} / {batch_idx}\t{loss:.4f}')
-    return (train_loss.cpu().detach().numpy()/len(train_set_final)),(valid_loss.cpu().detach().numpy()/len(valid_set_final))
+        return (train_loss.cpu().detach().numpy() / len(train_set_final)), (valid_loss.cpu().detach().numpy() / len(valid_set_final))
 
-
-def test_do_pro(test_set,epochs):
+def test(test_set,epochs):
     dataset=torch.utils.data.DataLoader(test_set, batch_size=params['batch_size'])
     test_loss=0
     with torch.no_grad():
         for data in dataset:
             test_smidata, test_labels = data
-            test_output, test_mean, test_logvar, test_pre, test_z = model(
-                test_smidata.to(dtype=torch.float32, device=device))
+            test_output, test_mean, test_logvar, test_pre, test_z = model(test_smidata.to(dtype=torch.float32, device=device))
             test_pre_loss_ca = nn.MSELoss()
             test_pre_loss = test_pre_loss_ca(test_pre, test_labels.to(dtype=torch.float32, device=device))
-            test_loss+=calculate_loss_by_type(test_output,test_smidata,test_mean,test_logvar,test_pre_loss,epochs)
+            test_loss+=calculate_loss_by_type(test_output,test_smidata,test_mean,test_logvar,test_pre_loss,epochs,'test')
+            mae = nn.L1Loss()
+            mae_logP = mae(test_labels [:, 0].to(device), test_pre[:, 0].to(device)).cpu().detach().numpy()
+            mae_qed = mae(test_labels [:, 1].to(device), test_pre[:, 1].to(device)).cpu().detach().numpy()
+            mae_SAS = mae(test_labels [:, 2].to(device), test_pre[:, 2].to(device)).cpu().detach().numpy()
+            # performance on separate prediction tasks [epoch,'logP_pre', 'qed_pre', 'SAS_pre', 'mae_logP', 'mae_qed', 'mae_SAS']
+            # separate_prediction_list = []
+            separate_prediction_list.append(
+                [epochs,torch.mean((test_pre[:, 0])).cpu().detach().numpy(), torch.mean((test_pre[:, 1])).cpu().detach().numpy(),
+                 torch.mean((test_pre[:, 2])).cpu().detach().numpy(), mae_logP, mae_qed,
+                 mae_SAS])
+
+
     return test_loss.cpu().detach().numpy()/len(dataset)
+
 
 
 if __name__ == "__main__":
@@ -248,18 +298,33 @@ if __name__ == "__main__":
     torch.manual_seed(params['RAND_SEED'])
     epochs = params['epochs']
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
     model = nn.DataParallel(MolecularVAE().to(device))
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(model.parameters(), lr=params['lr'])
 
     for epoch in range(1, epochs + 1):
-        if params['do_prop_pred']:
-            train_set_final, valid_set_final, test_dataset = main_property_run(params)
-        else:
-            train_set_final, valid_set_final, test_dataset = main_no_prop(params)
-        train_loss,valid_loss=train(epoch, train_set_final, valid_set_final)
-        test_loss=test_do_pro(test_dataset,epoch)
-        print([epoch,train_loss,valid_loss,test_loss])
-        list.append([epoch,train_loss,valid_loss,test_loss])
-    df = pd.DataFrame(list, columns=['epoch', 'Train_loss', 'Valid_loss', 'Test_loss'])
-    df.to_csv(''+str(dt_string.replace("/",'_'))+'train_process.csv')
+        training_data_dic=load_data_by_task(params)
+        train_set_final=training_data_dic['train_set_final'].to_numpy()
+        train_loss, valid_loss = train(epoch, training_data_dic['train_set_final'].tolist(), training_data_dic['valid_set_final'].tolist())
+        test_loss = test(training_data_dic['test_dataset'].tolist(), epoch)
+        #print([epoch, train_loss, valid_loss, test_loss])
+
+    '''separate_prediction_list For evaluate the prediction results on test set of each epoch'''
+    # performance on separate prediction tasks [epoch,'logP_pre', 'qed_pre', 'SAS_pre', 'mae_logP', 'mae_qed', 'mae_SAS']
+    pd.DataFrame(separate_prediction_list, columns=['epoch', 'logP_pre', 'qed_pre', 'SAS_pre', 'mae_logP', 'mae_qed', 'mae_SAS']).to_csv(
+        'Loss_record/' + str(dt_string.replace("/", '_')) + '_separate_prediction_list.csv')
+
+    '''list for record annealing performance '''
+    #[epoch,loss_with_annealing,loss_without_annealing,annealing_weights,process_type]
+    pd.DataFrame(list_for_record_annealing_performance,
+                 columns=['epoch', 'kl_loss_with_annealing','kl_without_annealing','annealing_weights','process_type']).to_csv(
+        'Loss_record/' + str(dt_string.replace("/", '_')) + '_list_for_record_annealing_performance.csv')
+
+
+    ''' record_list  Only for VAE+ properties prediction task'''
+    # record_list for recording the loss terms [epoch,vae_loss, reconstruction_loss, prediction_loss,process_type]
+    if params['do_prop_pred']:
+        pd.DataFrame(record_list, columns=['epoch','vae_loss', 'reconstruction_loss', 'KL_loss','prediction_loss','process_type']).to_csv('Loss_record/'+str(dt_string.replace("/",'_'))+'_record_list.csv')
+
+
 
