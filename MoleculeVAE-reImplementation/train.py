@@ -10,24 +10,22 @@ import torch.utils.data
 import argparse
 import torch.optim as optim
 import torch
-from dataloader import one_hot_encoder,one_hot_decoder
+
 from model import MolecularVAE
 from model import CustomMoleculeDataset
-from torch.utils.data import Dataset, DataLoader
+
 from dataloader import load_dataset
 import torch.utils.data as data
-from sklearn.decomposition import PCA
+
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 import gif
 import warnings
 warnings.filterwarnings("ignore")
-from sklearn.decomposition import PCA, IncrementalPCA
-from scipy.spatial import geometric_slerp
-import time
+
 import os
 from datetime import datetime
-from recordclass import dataobject, astuple, asdict
+
 # dd/mm/YY H:M:S
 dt_string = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")
 print("date and time =", dt_string)
