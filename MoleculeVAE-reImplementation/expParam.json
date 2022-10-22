@@ -1,6 +1,6 @@
 {
   "Dataname": "zinc",
-  "FromDeepchem":true,
+  "FromDeepchem":false,
   "featurizer":"ECFP",
   "normalizeSize": 120,
   "MAX_LEN": 120,
@@ -9,19 +9,23 @@
   "encoder_weights_file": "encoder.h5",
   "decoder_weights_file": "decoder.h5",
   "test_idx_file": "test_idx.npy",
+  "Data_file": "Data/250k_rndm_zinc_drugs_clean_3.csv",
   "history_file": "history.csv",
   "checkpoint_path": "./",
   "do_prop_pred": true,
   "TRAIN_MODEL": true,
   "ENC_DEC_TEST": false,
+  "SAVE_WEIGHT": false,
   "PADDING": "right",
   "RAND_SEED": 42,
-  "epochs": 70,
+  "epochs": 200,
+  "loss_type": "vae_pre_with_annealing",
   "vae_annealer_start": 29,
   "dropout_rate_mid": 0.082832929704794792,
   "anneal_sigmod_slope": 0.51066543057913916,
   "recurrent_dim": 488,
-  "batch_size": 126,
+  "batch_size": 128,
+  "validation_batch_size": 1000,
   "lr": 0.00039192162392520126,
   "hidden_dim": 196,
   "tgru_dropout": 0.19617749608323892,
@@ -29,3 +33,4 @@
   "middle_layer": 1,
   "momentum": 0.97170900638688007
 }
+
