@@ -54,7 +54,7 @@ class LogFile(object):
 
     def save_log(self,params):
         if not os.path.exists('Loss_record'):
-            os.mkdir(dir_name)
+            os.mkdir('Loss_record')
         '''separate_prediction_list For evaluate the prediction results on test set of each epoch'''
         # performance on separate prediction tasks [epoch,'logP_pre', 'qed_pre', 'SAS_pre', 'mae_logP', 'mae_qed', 'mae_SAS']
         pd.DataFrame(self.separate_prediction_list,
