@@ -13,12 +13,10 @@ def load_params(param_file=None, verbose=True):
                 print('{:25s} - {:12}'.format(key, str(value)))
             print('rest of parameters are set as default')
         parameters = {
-
     # for starting model from a checkpoint
     'reload_model': False,
     'prev_epochs': 0,
-    "verbose_print": 0,
+    "verbose_print": 0,}
 
-}
         parameters.update(hyper_p)
     return parameters
