@@ -1,59 +1,121 @@
-import torch
+
 import numpy as np
-import deepchem as dc
-from rdkit import Chem
 from rdkit import rdBase, Chem
-from rdkit.Chem import AllChem, Descriptors
-print(rdBase.rdkitVersion)
 import pandas as pd
-import seaborn as sns
 import os
-import sys
-from rdkit.Chem import QED
 import hyperparameters
-sys.path.append(os.path.join(Chem.RDConfig.RDContribDir, 'SA_Score'))
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.data
-import sascorer
 import argparse
-from collections import OrderedDict
-import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from sklearn import model_selection
-import zipfile
 import torch
-from sklearn.preprocessing import OneHotEncoder
-import h5py
-import pickle
-
+from sklearn.decomposition import IncrementalPCA
 from model import MolecularVAE
-def oneHotencoder(SmiData,normalizeSize):
-    import collections
-    from collections import OrderedDict
-    dicset=list(set([*''.join(SmiData)]))
-    od = collections.OrderedDict([(a,list(dicset).index(a)) for a in dicset])
-    #x=[torch.nn.functional.one_hot(torch.tensor(list(map(lambda a: od[a], [*vec]))), num_classes=len(dicset)) for vec in SmiData]
-    x = [np.concatenate((torch.nn.functional.one_hot(torch.tensor(list(map(lambda a: od[a], [*vec]))), num_classes=len(dicset)+1), torch.zeros(normalizeSize - len(vec), len(dicset)+1)), axis=0) for vec
-         in SmiData]
-    return x,od
+from collections import OrderedDict
+import matplotlib.pyplot as plt
+from dataloader import one_hot_decoder, load_character_index_lookup_dict
+from dataloader import one_hot_encoder, caculate_target_values
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-tasks, datasets, transformers = dc.molnet.load_qm9(featurizer="ECFP")
-train_dataset, valid_dataset, test_dataset = datasets
-TSmiOnehot, TSmiDic = oneHotencoder(test_dataset.ids,120)
-
 model = MolecularVAE().to(device)
+model_path = 'Weights1/23_10_2022 07:27:49150_param.pth'
+state_dict = torch.load(model_path)
+new_state_dict = OrderedDict()
+for k, v in state_dict.items():
+    name = k[7:]  # remove `module.`
+    new_state_dict[name] = v
+# load params
+model.load_state_dict(new_state_dict)
 
-model.load_state_dict(torch.load('param.pth'))
 
-output, mean, logvar,pre = model(torch.from_numpy((np.array(TSmiOnehot[:100]))).to(dtype=torch.float32, device=device))
-from dataloader import  oneHotdecoder
-from dataloader import od
+def plot(xi, yi, c, label):
+    data = pd.DataFrame(
+        {'x': xi, 'y': yi, 'c': c})
+    cm = plt.cm.get_cmap('RdYlBu')
+    p = plt.scatter(data.x, data.y, c=data.c, alpha=0.5, s=3)
+    plt.colorbar(p, label=label)
+    plt.axis('off')
+    plt.savefig(label + '.png')
+    plt.clf()
 
 
+def plot_latent_space(data, n_sample):
+    '''
 
-print(oneHotdecoder(output.cpu().detach().numpy(),od))
-#from sklearn.decomposition import PCA
-#pca = PCA(n_components=2)
-#mol_data=pca.fit_transform(output.cpu().detach().numpy()[0])
+    :param data: samples from latent space size=(n_sample,292)
+    :param n_sample: number of samples
+    :return: none ( generated SAS.png qed.png logP.png)
+    '''
+
+    visual_data = model.predict_properties(data.to(device))
+    pca = IncrementalPCA(n_components=2)
+    a = torch.nan_to_num(visual_data).cpu().detach().numpy()
+    visualize_z = pca.fit_transform(visual_data[~np.isnan(a)].cpu().detach().numpy().reshape(n_sample, -1))
+    normalized_z = visualize_z / np.linalg.norm(visualize_z)
+    plot(normalized_z[:, 0], normalized_z[:, 1], visual_data[:, 0].cpu().detach().numpy(), 'logP')
+    plot(normalized_z[:, 0], normalized_z[:, 1], visual_data[:, 1].cpu().detach().numpy(), 'qed')
+    plot(normalized_z[:, 0], normalized_z[:, 1], visual_data[:, 2].cpu().detach().numpy(), 'SAS')
+
+
+def search_smile(string):
+    '''
+    :param string: input generated string, because
+    :return: list of possible molecular
+    '''
+    stringlist = []
+    for id in range(0, len(string)):
+        m = Chem.MolFromSmiles(string[:id], sanitize=True)
+        if m is None:
+            print('invalid SMILES')
+        else:
+            try:
+                Chem.SanitizeMol(m)
+                stringlist.append(string[:id])
+            except:
+                print('invalid chemistry')
+    return stringlist[1:]
+
+
+def generate_sample(data, n_search, params):
+    '''
+
+    :param data: samples from latent space
+    :param n_search: search from n generated string
+    :param params: params['normalizeSize']
+    :return: _Ganerated_mol.csv generated
+    '''
+    dic = load_character_index_lookup_dict()
+    random = data[torch.randint(len(data), (n_search,))]
+    test_list = one_hot_decoder(model.decode(random.to(device)).cpu().detach().numpy(), dic)
+    mol = []
+    for each in test_list:
+        mol.extend(search_smile(each))
+
+    generated_mol = list(set(mol))
+    one_hot_feature, character_index_lookup_dict = one_hot_encoder(generated_mol, params['normalizeSize'])
+    data = torch.tensor(np.array([i.cpu().detach().numpy() for i in one_hot_feature]))
+    output, mean, logvar, pre, z = model(data.to(dtype=torch.float32, device=device))
+
+    G = []
+    for each in list(set(mol)):
+        G.append(caculate_target_values(each))
+    data_tuples = list(zip(generated_mol, pre.cpu().detach().numpy(), G))
+    print(data_tuples)
+    pd.DataFrame(data_tuples, columns=['SMILE_mol', 'properties_prediction_logP_qed_SAS', 'ground_truth']).to_csv(
+        '' + str(model_path.replace("/", '_')) + '_Ganerated_mol.csv')
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-e', '--exp_file',
+                        help='experiment file', default='expParam.json')
+    parser.add_argument('-d', '--directory',
+                        help='exp directory', default=None)
+    args = vars(parser.parse_args())
+    if args['directory'] is not None:
+        args['exp_file'] = os.path.join(args['directory'], args['exp_file'])
+
+    params = hyperparameters.load_params(args['exp_file'])
+    n_sample = 10000
+    data = 1e-2 * torch.randn((n_sample, 292))
+    n_generate = 1000
+    plot_latent_space(data, n_sample)
+    generate_sample(data, n_generate, params)
