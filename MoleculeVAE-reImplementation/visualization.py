@@ -16,7 +16,7 @@ from dataloader import one_hot_encoder, caculate_target_values
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = MolecularVAE().to(device)
-model_path = 'Weights1/23_10_2022 07:27:49150_param.pth'
+model_path = 'Weights/23_10_2022 07:27:49150_param.pth'
 state_dict = torch.load(model_path)
 new_state_dict = OrderedDict()
 for k, v in state_dict.items():
