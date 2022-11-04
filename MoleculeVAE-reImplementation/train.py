@@ -25,6 +25,7 @@ warnings.filterwarnings("ignore")
 
 import os
 from datetime import datetime
+from tqdm.auto import tqdm
 
 # dd/mm/YY H:M:S
 dt_string = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")
@@ -299,7 +300,9 @@ def train(
     train_loss = 0
     valid_loss = 0
     if params['do_prop_pred']:
-        for batch_idx, (data,label) in enumerate(train_dataloader):
+        for batch_idx, (data,label) in tqdm(
+                enumerate(train_dataloader),
+                total=len(train_dataloader)):
             data = data.to(dtype=torch.float32, device=device)
             label=label.to(dtype=torch.float32, device=device)
             optimizer.zero_grad()
