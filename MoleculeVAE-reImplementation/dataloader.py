@@ -19,13 +19,16 @@ from sklearn.model_selection import train_test_split
 from rdkit.Chem import QED
 import deepchem as dc
 import ast
+from rdkit.Chem import Descriptors
+
+from IPython.core.debugger import set_trace
 
 '''
 **Constant:ALL_SMILES_CHARACTERS
-Unlike dictionary used by https://github.com/aksub99/molecular-vae 
+Unlike dictionary used by https://github.com/aksub99/molecular-vae
 
 Authors mentioned their SMILES-based text encoding used a subset of
-35 different characters for ZINC and 22 different characters for QM9. 
+35 different characters for ZINC and 22 different characters for QM9.
 Actually there are more than 24 characters in QM9 Dataset.
 
 In Update version using 35 characters
@@ -195,7 +198,7 @@ def caculate_target_values(smiles):
     dataset.
     """
     m = Chem.MolFromSmiles(smiles)
-    logp = Chem.Descriptors.MolLogP(m)
+    logp = Descriptors.MolLogP(m)
     qed = QED.default(m)
     sas = sascorer.calculateScore(m)
 
@@ -247,7 +250,10 @@ def extract_properties_value(smile_onehot, smile_string):
     with open("properties_value.json", "w") as outfile:
         json.dump(str(properties_dic), outfile)
     return X_final, Y_values
-def one_hot_decoder(one_hot_data,dic):
+
+
+def one_hot_decoder(one_hot_data, dic):
+    # TODO: not sure this function works. Not used anywhere and failed in notebook
     dic_swap = {v: k for k, v in dic.items()}
     return["".join(map(str, list(map(lambda a: dic_swap[a], ids.argmax(-1))))) for ids in one_hot_data]
 
