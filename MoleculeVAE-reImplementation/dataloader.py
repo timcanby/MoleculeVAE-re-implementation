@@ -21,7 +21,6 @@ import deepchem as dc
 import ast
 from rdkit.Chem import Descriptors
 
-from IPython.core.debugger import set_trace
 
 '''
 **Constant:ALL_SMILES_CHARACTERS
