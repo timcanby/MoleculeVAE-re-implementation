@@ -286,7 +286,9 @@ def plot3D(xi, yi, zi, c, label, title, n_min, n_max):
 '''Train & Test func.'''
 
 def train(
-        epochs,train_set_final: data.Dataset,
+        model: torch.nn.Module,
+        epoch,
+        train_set_final: data.Dataset,
         valid_set_final: data.Dataset,
         logger,
         params: Dict,
@@ -300,59 +302,85 @@ def train(
     train_loss = 0
     valid_loss = 0
     if params['do_prop_pred']:
-        for batch_idx, (data,label) in tqdm(
-                enumerate(train_dataloader),
-                total=len(train_dataloader)):
+        for data,label in tqdm(
+                train_dataloader,
+                total=len(train_dataloader),
+                desc=f'train ({epoch}/{params["epochs"]}): '):
             data = data.to(dtype=torch.float32, device=device)
             label=label.to(dtype=torch.float32, device=device)
             optimizer.zero_grad()
             output, mean, logvar,pre,z = model(data)
             pre_loss_ca=nn.MSELoss()
             pre_loss=pre_loss_ca(pre,label)
-            loss=calculate_loss_by_type(output,data, mean, logvar,pre_loss,epochs,'train',logger)
+            loss=calculate_loss_by_type(
+                output,data, mean, logvar,pre_loss,epoch,'train',logger)
             loss.backward()
-            train_loss += loss
+            train_loss += loss.cpu().detach()
             optimizer.step()
-            if batch_idx % len(train_dataloader) == 0:
-                with torch.no_grad():
-                    for data in valid_dataloader:
-                        valid_smidata, valid_labels = data
-                        valid_output, valid_mean, valid_logvar, valid_pre, valid_z = model(valid_smidata.to(dtype=torch.float32, device=device))
-                        valid_pre_loss_ca = nn.MSELoss()
-                        valid_pre_loss = valid_pre_loss_ca(valid_pre, valid_labels.to(dtype=torch.float32, device=device))
-                        valid_loss+= calculate_loss_by_type(valid_output, valid_smidata, valid_mean, valid_logvar,valid_pre_loss, epochs,'valid',logger)
-                    if params["SAVE_WEIGHT"]:
-                        torch.save(model.state_dict(), 'Weights/' + str(dt_string.replace("/", '_')) + str(epochs) + '_param.pth')
 
-                    print(f'{epochs} / {batch_idx}\t{loss:.4f}')
-        return (train_loss.cpu().detach().numpy() / len(train_dataloader)), (valid_loss.cpu().detach().numpy() / len(valid_dataloader))
+        with torch.no_grad():
+            for data in tqdm(
+                    valid_dataloader, total=len(valid_dataloader), desc='validation: '):
+                valid_smidata, valid_labels = data
+                valid_output, valid_mean, valid_logvar, valid_pre, valid_z = \
+                    model(valid_smidata.to(dtype=torch.float32, device=device))
+
+                valid_pre_loss_ca = nn.MSELoss()
+                valid_pre_loss = valid_pre_loss_ca(
+                    valid_pre,
+                    valid_labels.to(dtype=torch.float32, device=device))
+                valid_loss += calculate_loss_by_type(
+                    valid_output, valid_smidata,
+                    valid_mean,
+                    valid_logvar,
+                    valid_pre_loss,
+                    epoch,'valid',logger).cpu().detach()
+            if params["SAVE_WEIGHT"]:
+                torch.save(model.state_dict(), 'Weights/' + str(dt_string.replace("/", '_')) + str(epoch) + '_param.pth')
+
+
+        return (train_loss.numpy() / len(train_dataloader)), (valid_loss.numpy() / len(valid_dataloader))
 
 def test(
+        model: torch.nn.Module,
         test_set: data.Dataset,
-        epochs,
+        epoch,
         logger,
         params: Dict,
         device):
     test_dataloader=torch.utils.data.DataLoader(test_set, batch_size=params['batch_size'])
     test_loss=0
     with torch.no_grad():
-        for data in test_dataloader:
+        for data in tqdm(test_dataloader, total=len(test_dataloader), desc='test: '):
             test_smidata, test_labels = data
             test_output, test_mean, test_logvar, test_pre, test_z = model(test_smidata.to(dtype=torch.float32, device=device))
             test_pre_loss_ca = nn.MSELoss()
             test_pre_loss = test_pre_loss_ca(test_pre, test_labels.to(dtype=torch.float32, device=device))
-            test_loss+=calculate_loss_by_type(test_output,test_smidata,test_mean,test_logvar,test_pre_loss,epochs,'test',logger)
+            test_loss += calculate_loss_by_type(
+                test_output,
+                test_smidata,
+                test_mean,
+                test_logvar,
+                test_pre_loss,
+                epoch,
+                'test',
+                logger).cpu().detach()
             mae = nn.L1Loss()
             mae_logP = mae(test_labels [:, 0].to(device), test_pre[:, 0].to(device)).cpu().detach().numpy()
             mae_qed = mae(test_labels [:, 1].to(device), test_pre[:, 1].to(device)).cpu().detach().numpy()
             mae_SAS = mae(test_labels [:, 2].to(device), test_pre[:, 2].to(device)).cpu().detach().numpy()
 
             # performance on separate prediction tasks [epoch,'logP_pre', 'qed_pre', 'SAS_pre', 'mae_logP', 'mae_qed', 'mae_SAS']
-            logger.add_separate_prediction([epochs,torch.mean((test_pre[:, 0])).cpu().detach().numpy(), torch.mean((test_pre[:, 1])).cpu().detach().numpy(),
-                 torch.mean((test_pre[:, 2])).cpu().detach().numpy(), mae_logP, mae_qed,
+            logger.add_separate_prediction(
+                [epoch,
+                 torch.mean((test_pre[:, 0])).cpu().detach().numpy(),
+                 torch.mean((test_pre[:, 1])).cpu().detach().numpy(),
+                 torch.mean((test_pre[:, 2])).cpu().detach().numpy(),
+                 mae_logP,
+                 mae_qed,
                  mae_SAS])
 
-    return test_loss.cpu().detach().numpy()/len(test_dataloader)
+    return test_loss.numpy()/len(test_dataloader)
 
 
 if __name__ == "__main__":
@@ -374,10 +402,10 @@ if __name__ == "__main__":
     model = nn.DataParallel(MolecularVAE().to(device))
     optimizer = optim.Adam(model.parameters(), lr=params['lr'])
     logger=LogFile()
-
+    training_data_dic=load_data_by_task(params)
     for epoch in range(1, epochs + 1):
-        training_data_dic=load_data_by_task(params)
         train_loss, valid_loss = train(
+            model,
             epoch,
             training_data_dic['train_set_final'],
             training_data_dic['valid_set_final'],
@@ -385,6 +413,7 @@ if __name__ == "__main__":
             params=params,
             device=device)
         test_loss = test(
+            model,
             training_data_dic['test_dataset'],
             epoch,
             logger,
