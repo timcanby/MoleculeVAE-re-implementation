@@ -183,7 +183,7 @@ def load_data_by_task(params):
 '''Loss function '''
 
 def calc_vae_loss(x_decoded_mean, x, z_mean, z_logvar):
-    xent_loss = nn.MSELoss()
+    xent_loss = nn.BCELoss()
     vecloss=xent_loss (x_decoded_mean.to(dtype=torch.float32, device=device),x.to(dtype=torch.float32, device=device))
     kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
 
@@ -196,7 +196,7 @@ def calc_vae_loss_with_annealing(x_decoded_mean, x, z_mean, z_logvar):
         - Default :cycle sigmoid schedule
 
     '''
-    xent_loss = nn.MSELoss()
+    xent_loss = nn.BCELoss()
     vecloss=xent_loss (x_decoded_mean.to(dtype=torch.float32, device=device),x.to(dtype=torch.float32, device=device))
     kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
     if epoch>=params['vae_annealer_start']:
@@ -207,6 +207,7 @@ def calc_vae_loss_with_annealing(x_decoded_mean, x, z_mean, z_logvar):
 
 def calculate_loss_by_type(decoder_output_data, input_string_data, z_mean, z_logvar, property_prediction_loss, epochs,process_type,logger):
     '''To calculate the loss value '''
+
     pre_loss = property_prediction_loss
     loss_type = params['loss_type']
     if loss_type == "Variance_only":
@@ -358,9 +359,7 @@ if __name__ == "__main__":
     epochs = params['epochs']
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(torch.cuda.is_available())
-    #print(globals())
-    if 'device' in globals():
-        print(device )
+
 
     model = nn.DataParallel(MolecularVAE().to(device))
     optimizer = optim.Adam(model.parameters(), lr=params['lr'])
@@ -387,3 +386,4 @@ if __name__ == "__main__":
             device=device)
 
     logger.save_log(params)
+
