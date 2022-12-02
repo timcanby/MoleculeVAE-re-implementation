@@ -5,10 +5,10 @@ import pandas as pd
 import os
 import sys
 import hyperparameters
-
+from rdkit.Chem import AllChem, Descriptors
 sys.path.append(os.path.join(Chem.RDConfig.RDContribDir, "SA_Score"))
 import torch
-import torch.nn.functional as F
+
 import torch.utils.data
 import sascorer
 import argparse
@@ -35,7 +35,8 @@ ALL_SMILES_CHARACTERS = ["S", "B", "\n", "P", "3", "s",
                         "5", "2", "\\", "F", "]", "1",
                         "N", "8", "-", "c", "4", "6",
                         "#", "n", "/", "+", "o", "I",
-                        "C", "H", "@", "(", "7", "."]
+                        "C", "H", "@", "(", "7", "." ,
+                         '<bos>','<eos>','<pad>']
 
 '''
 Read in data:
@@ -160,21 +161,21 @@ def make_encoding_for_smiles(string_list, character_index_lookup_dict, normalize
     - Outputs:
         - onehot_out: one hot vector
     """
+    string_padding_size=normalize_size-len(string_list)-2
 
-    index_list = list(map(lambda a: character_index_lookup_dict[a], [*string_list]))
+
+    new_string_list=[*string_list]+['<pad>']*string_padding_size
+
+    new_string_list_input = ['<bos>'] + new_string_list + ['<eos>']
+
+
+    index_list = list(map(lambda a: character_index_lookup_dict[a], new_string_list_input))
     num_classes = len(character_index_lookup_dict)
     one_hot_vector = torch.nn.functional.one_hot(
         torch.tensor(index_list), num_classes=num_classes
     )
-    padding_size = (
-        0,
-        0,
-        0,
-        normalize_size - len(string_list),
-    )  # pad last dim by 1 on each side
-    onehot_out = F.pad(one_hot_vector, padding_size, "constant", 0)
-    """output shape=[normalize_size,len(character_index_lookup_dict)]"""
-    return onehot_out
+
+    return one_hot_vector
 
 
 
@@ -195,7 +196,7 @@ def caculate_target_values(smiles):
     dataset.
     """
     m = Chem.MolFromSmiles(smiles)
-    logp = Chem.Descriptors.MolLogP(m)
+    logp = Descriptors.MolLogP(m)
     qed = QED.default(m)
     sas = sascorer.calculateScore(m)
 
