@@ -12,7 +12,7 @@ class MolecularVAE(nn.Module):
         self.conv_1 = nn.Conv1d(120, 9, kernel_size=9)
         self.conv_2 = nn.Conv1d(9, 9, kernel_size=9)
         self.conv_3 = nn.Conv1d(9, 70, kernel_size=8)
-        self.linear_0 = nn.Linear(910, 435)
+        self.linear_0 = nn.Linear(1120, 435)
         self.linear_1 = nn.Linear(435, 292)
         self.linear_2 = nn.Linear(435, 292)
         self.linear_3 = nn.Linear(292, 292)
@@ -20,7 +20,7 @@ class MolecularVAE(nn.Module):
         self.linear_p2 = nn.Linear(100, 3)
         self.visualize_z=nn.Linear(3,2)
         self.gru = nn.GRU(292, 501, 3, batch_first=True)
-        self.linear_4 = nn.Linear(501, 36)
+        self.linear_4 = nn.Linear(501, 39)
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax()
 
@@ -74,4 +74,3 @@ class CustomMoleculeDataset(torch.utils.data.Dataset):
         return len(self.smiles_string)
     def __getitem__(self, idx):
         return self.smiles_string[idx], self.properties_label[idx]
-
