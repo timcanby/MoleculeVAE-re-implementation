@@ -1,4 +1,3 @@
-
 import numpy as np
 from rdkit import rdBase, Chem
 import pandas as pd
@@ -13,6 +12,7 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 from dataloader import one_hot_decoder, load_character_index_lookup_dict
 from dataloader import one_hot_encoder, caculate_target_values
+import re
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model = MolecularVAE().to(device)
@@ -61,17 +61,18 @@ def search_smile(string):
     :return: list of possible molecular
     '''
     stringlist = []
-    for id in range(0, len(string)):
-        m = Chem.MolFromSmiles(string[:id], sanitize=True)
+    string_re = re.findall(".*<bos>(.*)<eos>.*", string)
+    for id in string_re:
+        m = Chem.MolFromSmiles(id, sanitize=True)
         if m is None:
             print('invalid SMILES')
         else:
             try:
                 Chem.SanitizeMol(m)
-                stringlist.append(string[:id])
+                stringlist.append(id)
             except:
                 print('invalid chemistry')
-    return stringlist[1:]
+    return stringlist
 
 
 def generate_sample(data, n_search, params):
@@ -115,7 +116,7 @@ if __name__ == "__main__":
 
     params = hyperparameters.load_params(args['exp_file'])
     n_sample = 10000
-    data = 1e-2 * torch.randn((n_sample, 292))
+    data = torch.randn((n_sample, 292))
     n_generate = 1000
     plot_latent_space(data, n_sample)
     generate_sample(data, n_generate, params)
