@@ -33,7 +33,7 @@ class MolecularVAE(nn.Module):
         return self.linear_1(x), self.linear_2(x)
 
     def sampling(self, z_mean, z_logvar):
-        epsilon = 1e-2 * torch.randn_like(z_logvar)
+        epsilon =  torch.randn_like(z_logvar)
         return torch.exp(0.5 * z_logvar) * epsilon + z_mean
 
     def decode(self, z):
