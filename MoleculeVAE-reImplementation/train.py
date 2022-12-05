@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import sys
 import hyperparameters
+
 sys.path.append(os.path.join(Chem.RDConfig.RDContribDir, 'SA_Score'))
 import torch.nn as nn
 import torch.utils.data
@@ -21,6 +22,7 @@ import matplotlib.pyplot as plt
 
 import gif
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import os
@@ -29,7 +31,6 @@ from datetime import datetime
 # dd/mm/YY H:M:S
 dt_string = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")
 print("date and time =", dt_string)
-
 
 "---To record the Loss log---"
 
@@ -52,7 +53,7 @@ class LogFile(object):
     def add_list_for_record_annealing_performance(self, log):
         self.list_for_record_annealing_performance.append(log)
 
-    def save_log(self,params):
+    def save_log(self, params):
         if not os.path.exists('Loss_record'):
             os.mkdir('Loss_record')
         '''separate_prediction_list For evaluate the prediction results on test set of each epoch'''
@@ -71,11 +72,10 @@ class LogFile(object):
         ''' record_list  Only for VAE+ properties prediction task'''
         # record_list for recording the loss terms [epoch,vae_loss, reconstruction_loss, prediction_loss,process_type]
         if params['do_prop_pred']:
-            pd.DataFrame(self.record_list, columns=['epoch', 'vae_loss', 'reconstruction_loss', 'KL_loss', 'prediction_loss',
-                                               'process_type']).to_csv(
+            pd.DataFrame(self.record_list,
+                         columns=['epoch', 'vae_loss', 'reconstruction_loss', 'KL_loss', 'prediction_loss',
+                                  'process_type']).to_csv(
                 'Loss_record/' + str(dt_string.replace("/", '_')) + '_record_list.csv')
-
-
 
 
 '''============cyclical_annealing for KL vanishing problem==================
@@ -85,6 +85,7 @@ class LogFile(object):
 
     KL vanishing:https://alibabatech.medium.com/next-gen-text-generation-alibaba-makes-progress-on-the-kl-vanishing-problem-77ec35f2afa2
     '''
+
 
 def frange_cycle_linear(start, stop, n_epoch, n_cycle=4, ratio=0.5):
     L = np.ones(n_epoch)
@@ -132,11 +133,14 @@ def frange_cycle_cosine(start, stop, n_epoch, n_cycle=4, ratio=0.5):
             v += step
             i += 1
     return L
+
+
 '''====End of cyclical_annealing module================================'''
 
-
 '''Read in the training data according to whether the prediction task is performed or not'''
-def split_validation_dataset(train_dataset,percentage_train):
+
+
+def split_validation_dataset(train_dataset, percentage_train):
     '''
      This is for building the train and validation datasets
          - train_dataset:torch.utils.data.Dataset object
@@ -154,7 +158,7 @@ def split_validation_dataset(train_dataset,percentage_train):
     train_set_final = torch.utils.data.DataLoader(train_set, batch_size=params['batch_size'])
     valid_set_final = torch.utils.data.DataLoader(valid_set, batch_size=params['batch_size'])
 
-    return train_set_final,valid_set_final
+    return train_set_final, valid_set_final
 
 
 def load_data_by_task(params):
@@ -169,25 +173,33 @@ def load_data_by_task(params):
     if params['do_prop_pred']:
         X_train, X_test, Y_train, Y_test, _ = load_dataset(params)
     else:
-        X_train, X_test, _  = load_dataset(params)
+        X_train, X_test, _ = load_dataset(params)
 
     train_dataset = CustomMoleculeDataset(X_train, Y_train)
-    train_set_dataloader , valid_set_dataloader  = split_validation_dataset(train_dataset, percentage_train=0.8)
-    test_dataloader = torch.utils.data.DataLoader(CustomMoleculeDataset(X_test, Y_test), batch_size=params['batch_size'])
-    training_data_dataloader_dic = pd.DataFrame(list(zip( train_set_dataloader , valid_set_dataloader , test_dataloader  )),
-                      columns=['train_set_dataloader', 'valid_set_dataloader', 'test_dataloader'])
+    train_set_dataloader, valid_set_dataloader = split_validation_dataset(train_dataset, percentage_train=0.8)
+    test_dataloader = torch.utils.data.DataLoader(CustomMoleculeDataset(X_test, Y_test),
+                                                  batch_size=params['batch_size'])
+    training_data_dataloader_dic = pd.DataFrame(list(zip(train_set_dataloader, valid_set_dataloader, test_dataloader)),
+                                                columns=['train_set_dataloader', 'valid_set_dataloader',
+                                                         'test_dataloader'])
     return training_data_dataloader_dic
-
 
 
 '''Loss function '''
 
+
+def cross_entropy_one_hot(input, target):
+    _, labels = target.max(dim=1)
+    return nn.CrossEntropyLoss()(input, labels)
+
+
 def calc_vae_loss(x_decoded_mean, x, z_mean, z_logvar):
-    xent_loss = nn.BCELoss()
-    vecloss=xent_loss (x_decoded_mean.to(dtype=torch.float32, device=device),x.to(dtype=torch.float32, device=device))
+    vecloss = cross_entropy_one_hot(x_decoded_mean.to(dtype=torch.float32, device=device),
+                                    x.to(dtype=torch.float32, device=device))
     kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
 
-    return vecloss,kl_loss
+    return vecloss, kl_loss
+
 
 def calc_vae_loss_with_annealing(x_decoded_mean, x, z_mean, z_logvar):
     '''
@@ -196,16 +208,17 @@ def calc_vae_loss_with_annealing(x_decoded_mean, x, z_mean, z_logvar):
         - Default :cycle sigmoid schedule
 
     '''
-    xent_loss = nn.BCELoss()
-    vecloss=xent_loss (x_decoded_mean.to(dtype=torch.float32, device=device),x.to(dtype=torch.float32, device=device))
+    vecloss = cross_entropy_one_hot(x_decoded_mean.to(dtype=torch.float32, device=device),
+                                    x.to(dtype=torch.float32, device=device))
     kl_loss = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
-    if epoch>=params['vae_annealer_start']:
-        return vecloss,frange_cycle_cosine(0.0, 1.0, epoch, 4, 0.5)[0],kl_loss
+    if epoch >= params['vae_annealer_start']:
+        return vecloss, frange_cycle_cosine(0.0, 1.0, epoch, 4, 0.5)[0], kl_loss
     else:
-        return vecloss,1,kl_loss
+        return vecloss, 1, kl_loss
 
 
-def calculate_loss_by_type(decoder_output_data, input_string_data, z_mean, z_logvar, property_prediction_loss, epochs,process_type,logger):
+def calculate_loss_by_type(decoder_output_data, input_string_data, z_mean, z_logvar, property_prediction_loss, epochs,
+                           process_type, logger):
     '''To calculate the loss value '''
 
     pre_loss = property_prediction_loss
@@ -216,23 +229,29 @@ def calculate_loss_by_type(decoder_output_data, input_string_data, z_mean, z_log
         loss = pre_loss
 
     elif loss_type == "vae_pre_no_annealing":
-        vecloss,kl_loss = calc_vae_loss(decoder_output_data, input_string_data, z_mean, z_logvar)
-        #TODO:scaling factor
-        vae_loss=vecloss+kl_loss
-        loss=vae_loss + pre_loss
-        #record_list.append([epochs, vae_loss, reconstruction_loss, prediction_loss, process_type])
-        logger.add_record_list([epochs, vae_loss.cpu().detach().numpy(),vecloss.cpu().detach().numpy(),kl_loss.cpu().detach().numpy(), pre_loss.cpu().detach().numpy(), process_type])
+        vecloss, kl_loss = calc_vae_loss(decoder_output_data, input_string_data, z_mean, z_logvar)
+        # TODO:scaling factor
+        vae_loss = vecloss + kl_loss
+        loss = vae_loss + pre_loss
+        # record_list.append([epochs, vae_loss, reconstruction_loss, prediction_loss, process_type])
+        logger.add_record_list(
+            [epochs, vae_loss.cpu().detach().numpy(), vecloss.cpu().detach().numpy(), kl_loss.cpu().detach().numpy(),
+             pre_loss.cpu().detach().numpy(), process_type])
 
     elif loss_type == "vae_pre_with_annealing":
-        vecloss,anealing_weight,kl_loss_original = calc_vae_loss_with_annealing(decoder_output_data, input_string_data, z_mean, z_logvar)
-        kl_loss=anealing_weight*kl_loss_original
+        vecloss, anealing_weight, kl_loss_original = calc_vae_loss_with_annealing(decoder_output_data,
+                                                                                  input_string_data, z_mean, z_logvar)
+        kl_loss = anealing_weight * kl_loss_original
         # TODO:scaling factor
         vae_loss = vecloss + kl_loss
         loss = vae_loss + pre_loss
 
         # list for record annealing performance
-        logger.add_list_for_record_annealing_performance([epochs,kl_loss.cpu().detach().numpy(),kl_loss_original.cpu().detach().numpy(),anealing_weight,process_type])
-        logger.add_record_list([epochs, vae_loss.cpu().detach().numpy(), vecloss.cpu().detach().numpy(), kl_loss.cpu().detach().numpy(),
+        logger.add_list_for_record_annealing_performance(
+            [epochs, kl_loss.cpu().detach().numpy(), kl_loss_original.cpu().detach().numpy(), anealing_weight,
+             process_type])
+        logger.add_record_list(
+            [epochs, vae_loss.cpu().detach().numpy(), vecloss.cpu().detach().numpy(), kl_loss.cpu().detach().numpy(),
              pre_loss.cpu().detach().numpy(), process_type])
 
     else:
@@ -242,8 +261,9 @@ def calculate_loss_by_type(decoder_output_data, input_string_data, z_mean, z_log
 
 '''========================End of loss module=========================='''
 
-
 '''Module for visualization'''
+
+
 @gif.frame
 def plot3D(xi, yi, zi, c, label, title, n_min, n_max):
     '''
@@ -274,10 +294,11 @@ def plot3D(xi, yi, zi, c, label, title, n_min, n_max):
     # plt.axis('off')
     plt.title('Epoch=' + title)
 
+
 '''========================End of visualization module=========================='''
 
-
 '''Train & Test func.'''
+
 
 def train(epochs, train_set_dataloader, valid_set_dataloader, logger, params: dict,
           device):
@@ -313,34 +334,36 @@ def train(epochs, train_set_dataloader, valid_set_dataloader, logger, params: di
 
                     print(f'{epochs} / {batch_idx}\t{loss:.4f}')
         return (train_loss.cpu().detach().numpy() / len(train_set_dataloader)), (
-                    valid_loss.cpu().detach().numpy() / len(valid_set_dataloader))
+                valid_loss.cpu().detach().numpy() / len(valid_set_dataloader))
 
-def test(model: torch.nn.Module,test_dataloader,epochs,logger, params: dict,
-        device):
 
-    test_loss=0
+def test(model: torch.nn.Module, test_dataloader, epochs, logger, params: dict,
+         device):
+    test_loss = 0
     with torch.no_grad():
         for data in tqdm(test_dataloader, total=len(test_dataloader), desc='test: '):
             test_smidata, test_labels = data
-            test_output, test_mean, test_logvar, test_pre, test_z = model(test_smidata.to(dtype=torch.float32, device=device))
+            test_output, test_mean, test_logvar, test_pre, test_z = model(
+                test_smidata.to(dtype=torch.float32, device=device))
             test_pre_loss_ca = nn.MSELoss()
             test_pre_loss = test_pre_loss_ca(test_pre, test_labels.to(dtype=torch.float32, device=device))
-            test_loss+=calculate_loss_by_type(test_output,test_smidata,test_mean,test_logvar,test_pre_loss,epochs,'test',logger).cpu().detach()
+            test_loss += calculate_loss_by_type(test_output, test_smidata, test_mean, test_logvar, test_pre_loss,
+                                                epochs, 'test', logger).cpu().detach()
             mae = nn.L1Loss()
-            mae_logP = mae(test_labels [:, 0].to(device), test_pre[:, 0].to(device)).cpu().detach().numpy()
-            mae_qed = mae(test_labels [:, 1].to(device), test_pre[:, 1].to(device)).cpu().detach().numpy()
-            mae_SAS = mae(test_labels [:, 2].to(device), test_pre[:, 2].to(device)).cpu().detach().numpy()
+            mae_logP = mae(test_labels[:, 0].to(device), test_pre[:, 0].to(device)).cpu().detach().numpy()
+            mae_qed = mae(test_labels[:, 1].to(device), test_pre[:, 1].to(device)).cpu().detach().numpy()
+            mae_SAS = mae(test_labels[:, 2].to(device), test_pre[:, 2].to(device)).cpu().detach().numpy()
 
             # performance on separate prediction tasks [epoch,'logP_pre', 'qed_pre', 'SAS_pre', 'mae_logP', 'mae_qed', 'mae_SAS']
             logger.add_separate_prediction(
-                [epochs,torch.mean((test_pre[:, 0])).cpu().detach().numpy(),
+                [epochs, torch.mean((test_pre[:, 0])).cpu().detach().numpy(),
                  torch.mean((test_pre[:, 1])).cpu().detach().numpy(),
                  torch.mean((test_pre[:, 2])).cpu().detach().numpy(),
                  mae_logP,
                  mae_qed,
                  mae_SAS])
 
-    return test_loss.cpu().detach().numpy()/len(test_dataloader)
+    return test_loss.cpu().detach().numpy() / len(test_dataloader)
 
 
 if __name__ == "__main__":
@@ -354,22 +377,23 @@ if __name__ == "__main__":
         args['exp_file'] = os.path.join(args['directory'], args['exp_file'])
 
     params = hyperparameters.load_params(args['exp_file'])
-    #print("All params:", params)
+    # print("All params:", params)
     torch.manual_seed(params['RAND_SEED'])
     epochs = params['epochs']
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(torch.cuda.is_available())
-
+    # print(globals())
+    if 'device' in globals():
+        print(device)
 
     model = nn.DataParallel(MolecularVAE().to(device))
     optimizer = optim.Adam(model.parameters(), lr=params['lr'])
-    logger=LogFile()
-    #'train_set_dataloader', 'valid_set_dataloader', 'test_dataloader'
-
+    logger = LogFile()
+    # 'train_set_dataloader', 'valid_set_dataloader', 'test_dataloader'
 
     for epoch in range(1, epochs + 1):
-        training_data_dataloader=load_data_by_task(params)
-        #train_set_final=training_data_dataloader['train_set_final'].to_numpy()
+        training_data_dataloader = load_data_by_task(params)
+        # train_set_final=training_data_dataloader['train_set_final'].to_numpy()
         train_loss, valid_loss = train(
             epoch,
             training_data_dataloader['train_set_dataloader'],
@@ -386,4 +410,3 @@ if __name__ == "__main__":
             device=device)
 
     logger.save_log(params)
-
